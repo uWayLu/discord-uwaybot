@@ -36,9 +36,12 @@ export async function loadCommands(
     if (entry.isDirectory()) {
       const files = await readdir(fullPath);
       for (const file of files) {
+        if (file.endsWith(".d.ts")) continue;
         if (!file.endsWith(".ts") && !file.endsWith(".js")) continue;
         await importCommand(join(fullPath, file), commands);
       }
+    } else if (entry.name.endsWith(".d.ts")) {
+      continue;
     } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".js")) {
       await importCommand(fullPath, commands);
     }

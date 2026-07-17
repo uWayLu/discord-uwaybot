@@ -44,7 +44,7 @@ function parsePtt(html: string): string {
     ?? html.match(/<div[^>]*id="main-content"[^>]*>([\s\S]*?)<\/div>/i);
   if (!mainMatch) return stripTags(html).slice(0, 8000);
 
-  let text = mainMatch[1];
+  let text = mainMatch[1] ?? "";
   text = text.replace(/<span[^>]*class="article-meta-tag"[^>]*>[\s\S]*?<\/span>/gi, "");
   text = text.replace(/<span[^>]*class="article-meta-value"[^>]*>[\s\S]*?<\/span>/gi, "");
   text = text.replace(/<div[^>]*class="article-metaline-right"[^>]*>[\s\S]*?<\/div>/gi, "");

@@ -6,6 +6,7 @@ export async function loadEvents(eventsDir: string, client: Client): Promise<voi
   const files = await readdir(eventsDir);
 
   for (const file of files) {
+    if (file.endsWith(".d.ts")) continue;
     if (!file.endsWith(".ts") && !file.endsWith(".js")) continue;
 
     const event = await import(join(eventsDir, file));

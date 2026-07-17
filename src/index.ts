@@ -9,9 +9,11 @@ process.on("unhandledRejection", (err) => {
 });
 
 const rootDir = join(import.meta.dirname, "..");
+const isProd = import.meta.dirname.endsWith("dist");
+const srcDir = isProd ? "dist" : "src";
 
-client.commands = await loadCommands(join(rootDir, "src", "commands"));
-await loadEvents(join(rootDir, "src", "events"), client);
+client.commands = await loadCommands(join(rootDir, srcDir, "commands"));
+await loadEvents(join(rootDir, srcDir, "events"), client);
 
 console.log("[BOT] Logging in...");
 await client.login(config.discord.token);
