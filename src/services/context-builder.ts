@@ -9,7 +9,7 @@ export function buildOpinionContext(
   allMessages: StoredMessage[],
   repliedMessageId?: string | null,
   threadId?: string | null,
-  limit: number = 30,
+  limit: number = 100,
 ): ContextResult {
   if (repliedMessageId) {
     const replyIdx = allMessages.findIndex((m) => m.id === repliedMessageId);
@@ -36,7 +36,10 @@ export function buildOpinionContext(
   return { messages: recentMsgs, source: "fallback" };
 }
 
-export function formatMessagesForLLM(msgs: StoredMessage[]): string {
+export function formatMessagesForLLM(
+  msgs: StoredMessage[],
+  nameMap?: Map<string, string>,
+): string {
   return msgs
     .map((m) => {
       const time = new Date(m.createdAt).toLocaleString("zh-TW", {
@@ -44,7 +47,8 @@ export function formatMessagesForLLM(msgs: StoredMessage[]): string {
         hour: "2-digit",
         minute: "2-digit",
       });
-      return `[${time}] <${m.userId}> ${m.content}`;
+      const name = nameMap?.get(m.userId) ?? m.userId;
+      return `[${time}] <${name}> ${m.content}`;
     })
     .join("\n");
 }

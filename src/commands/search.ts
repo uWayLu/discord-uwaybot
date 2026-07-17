@@ -94,6 +94,8 @@ const command: Command = {
       query,
       { label: duration.label },
       channelName,
+      result.total_mentions,
+      result.summary,
     );
 
     await interaction.editReply({ embeds: [embed] });

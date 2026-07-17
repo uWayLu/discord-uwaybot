@@ -4,6 +4,7 @@ import { storeMessage, getRecentMessages } from "../services/message-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { getOpinion } from "../llm/opinion.js";
 import { buildOpinionEmbed } from "../utils/format.js";
+import { extractUrls, fetchUrl } from "../utils/web.js";
 
 export default {
   name: Events.MessageCreate,
@@ -41,7 +42,22 @@ async function handleMention(message: Message) {
       await (message.channel as TextChannel).sendTyping().catch(() => {});
     }
 
-    const recentMessages = await getRecentMessages(message.channelId, 50);
+    const recentMessages = await getRecentMessages(message.channelId, 100);
+
+    const nameMap = new Map<string, string>();
+    if (message.guild) {
+      const userIds = [...new Set(recentMessages.map((m) => m.userId))];
+      await Promise.all(
+        userIds.map(async (id) => {
+          try {
+            const member = await message.guild!.members.fetch(id);
+            nameMap.set(id, member.displayName);
+          } catch {
+            nameMap.set(id, id);
+          }
+        }),
+      );
+    }
 
     const repliedId = message.reference?.messageId ?? null;
     const ch = message.channel;
@@ -53,7 +69,19 @@ async function handleMention(message: Message) {
     const question =
       message.content.replace(/<@!?\d+>/g, "").trim() || "你怎麼看？";
 
-    const result = await getOpinion(context.messages, question);
+    const urls = extractUrls(question);
+    let webContent = "";
+    if (urls.length > 0) {
+      const fetches = await Promise.all(urls.slice(0, 3).map(fetchUrl));
+      webContent = fetches
+        .map((f, i) => {
+          if (f.error) return `[${urls[i]}] 錯誤: ${f.error}`;
+          return `[${f.title || urls[i]}]\n${f.content}`;
+        })
+        .join("\n\n---\n\n");
+    }
+
+    const result = await getOpinion(context.messages, question, webContent, nameMap);
 
     const embed = buildOpinionEmbed(
       result.opinion,

@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Discord bot for private server summarization and analysis",
   "scripts": {
-    "dev": "tsx --env-file=.env src/index.ts",
+    "dev": "tsx watch --env-file=.env src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
     "deploy": "tsx --env-file=.env scripts/deploy-commands.ts",

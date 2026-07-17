@@ -1,5 +1,3 @@
-import { z } from "zod";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { llm } from "./client.js";
 import { config } from "../config.js";
 import type { StoredMessage } from "../services/message-store.js";
@@ -7,23 +5,37 @@ import { formatMessagesForLLM } from "../services/context-builder.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const SearchSchema = z.object({
-  results: z.array(
-    z.object({
-      summary: z.string(),
-      original: z.string(),
-      userId: z.string(),
-      timestamp: z.string(),
-    }),
-  ),
-});
-
-export type SearchResult = z.infer<typeof SearchSchema>;
+export type SearchResult = {
+  total_mentions: number;
+  summary: string;
+  results: Array<{
+    summary: string;
+    original: string;
+    userId: string;
+    timestamp: string;
+  }>;
+};
 
 const systemPrompt = readFileSync(
   join(import.meta.dirname, "..", "prompts", "search.txt"),
   "utf-8",
 );
+
+const OUTPUT_FORMAT = `
+
+你必須嚴格回覆以下 JSON 格式，不要加入其他文字：
+{
+  "total_mentions": 5,
+  "summary": "整體搜尋摘要",
+  "results": [
+    {
+      "summary": "該訊息的摘要",
+      "original": "原訊息內容",
+      "userId": "user_id",
+      "timestamp": "時間"
+    }
+  ]
+}`;
 
 export async function searchMessages(
   messages: StoredMessage[],
@@ -37,16 +49,15 @@ export async function searchMessages(
   const response = await llm.chat.completions.create({
     model: config.openai.model,
     messages: [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: systemPrompt + OUTPUT_FORMAT },
       { role: "user", content: userContent },
     ],
-    response_format: zodResponseFormat(SearchSchema, "search"),
   });
   console.log(`[LLM] search call took ${Date.now() - t0}ms`);
 
   const content = response.choices[0]?.message?.content;
   if (!content) {
-    return { results: [] };
+    return { total_mentions: 0, summary: "", results: [] };
   }
 
   try {
@@ -58,9 +69,13 @@ export async function searchMessages(
       userId: r.userId ?? r.user_id ?? "",
       timestamp: r.timestamp ?? "",
     }));
-    return { results };
+    return {
+      total_mentions: raw.total_mentions ?? results.length,
+      summary: raw.summary ?? "",
+      results,
+    };
   } catch (e) {
     console.error("[LLM] Failed to parse search response:", content.slice(0, 300));
-    return { results: [] };
+    return { total_mentions: 0, summary: "", results: [] };
   }
 }

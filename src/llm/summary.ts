@@ -1,5 +1,3 @@
-import { z } from "zod";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { llm } from "./client.js";
 import { config } from "../config.js";
 import type { Topic } from "../services/topic-detector.js";
@@ -7,24 +5,35 @@ import { formatMessagesForLLM } from "../services/context-builder.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const SummarySchema = z.object({
-  topics: z.array(
-    z.object({
-      title: z.string(),
-      summary: z.string(),
-      participants: z.array(z.string()),
-      decisions: z.array(z.string()),
-      open_questions: z.array(z.string()),
-    }),
-  ),
-});
-
-export type SummaryResult = z.infer<typeof SummarySchema>;
+export type SummaryResult = {
+  topics: Array<{
+    title: string;
+    summary: string;
+    participants: string[];
+    decisions: string[];
+    open_questions: string[];
+  }>;
+};
 
 const systemPrompt = readFileSync(
   join(import.meta.dirname, "..", "prompts", "summary.txt"),
   "utf-8",
 );
+
+const OUTPUT_FORMAT = `
+
+你必須嚴格回覆以下 JSON 格式，不要加入其他文字：
+{
+  "topics": [
+    {
+      "title": "主題標題",
+      "summary": "一句話摘要",
+      "participants": ["user_id"],
+      "decisions": ["已做出的決定"],
+      "open_questions": ["未解的問題"]
+    }
+  ]
+}`;
 
 export async function summarizeTopics(topics: Topic[]): Promise<SummaryResult> {
   const topicBlocks = topics.map((t, i) => {
@@ -38,10 +47,9 @@ export async function summarizeTopics(topics: Topic[]): Promise<SummaryResult> {
   const response = await llm.chat.completions.create({
     model: config.openai.model,
     messages: [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: systemPrompt + OUTPUT_FORMAT },
       { role: "user", content: userContent },
     ],
-    response_format: zodResponseFormat(SummarySchema, "summary"),
   });
   console.log(`[LLM] summary call took ${Date.now() - t0}ms`);
 

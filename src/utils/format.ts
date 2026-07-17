@@ -57,7 +57,7 @@ export function buildOpinionEmbed(
 ): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle("💭 我的看法")
-    .setDescription(opinion)
+    .setDescription(opinion || "抱歉，我無法產生回應。")
     .setColor(0xfee75c)
     .setFooter({ text: `信心度: ${Math.round(confidence * 100)}%` })
     .setTimestamp();
@@ -77,6 +77,8 @@ export function buildSearchEmbed(
   query: string,
   timeRange: { label: string },
   channelName: string,
+  totalMentions: number = results.length,
+  searchSummary: string = "",
 ): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle(`🔍 ${channelName} 搜尋結果`)
@@ -89,14 +91,30 @@ export function buildSearchEmbed(
     return embed;
   }
 
-  for (const r of results.slice(0, 5)) {
+  embed.addFields({
+    name: "📊 統計",
+    value: `共提及 **${totalMentions}** 次`,
+  });
+
+  if (searchSummary) {
+    embed.addFields({
+      name: "📝 摘要",
+      value: searchSummary,
+    });
+  }
+
+  for (let i = 0; i < Math.min(results.length, 5); i++) {
+    const r = results[i]!;
     const parts: string[] = [`💬 ${r.summary}`];
-    parts.push(`> ${r.original.slice(0, 100)}${r.original.length > 100 ? "..." : ""}`);
+    if (r.original) {
+      const orig = r.original.length > 150 ? r.original.slice(0, 150) + "..." : r.original;
+      parts.push(`> ${orig}`);
+    }
     if (r.userId) parts.push(`👤 <@${r.userId}>`);
     if (r.timestamp) parts.push(`🕐 ${r.timestamp}`);
 
     embed.addFields({
-      name: `📌 結果`,
+      name: `📌 ${i + 1}.`,
       value: parts.join("\n"),
     });
   }
