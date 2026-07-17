@@ -22,14 +22,18 @@ export default {
       console.log(`[CMD] /${interaction.commandName} completed`);
     } catch (error) {
       console.error(`[BOT] Error executing ${interaction.commandName}:`, error);
-      const reply = {
-        content: "❌ 執行指令時發生錯誤。",
-        flags: 64 as const,
-      };
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(reply);
-      } else {
-        await interaction.reply(reply);
+      try {
+        const reply = {
+          content: "❌ 執行指令時發生錯誤。",
+          flags: 64 as const,
+        };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(reply);
+        } else {
+          await interaction.reply(reply);
+        }
+      } catch (replyError) {
+        console.error(`[BOT] Failed to send error reply:`, replyError);
       }
     }
   },

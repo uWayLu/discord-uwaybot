@@ -1,20 +1,25 @@
 import { SlashCommandBuilder } from "discord.js";
 import type { Command } from "../types/interfaces.js";
 import { getMessagesInTimeRange } from "../services/message-store.js";
-import { detectTopics } from "../services/topic-detector.js";
-import { summarizeTopics } from "../llm/summary.js";
-import { buildSummaryEmbed } from "../utils/format.js";
+import { searchMessages } from "../llm/search.js";
+import { buildSearchEmbed } from "../utils/format.js";
 import { parseDuration, parseOptionalDate } from "../utils/time.js";
 import { config } from "../config.js";
 
 const command: Command = {
   data: new SlashCommandBuilder()
-    .setName("summary")
-    .setDescription("摘要目前頻道的訊息")
+    .setName("search")
+    .setDescription("搜尋頻道中的相關訊息")
     .addStringOption((option) =>
       option
         .setName("duration")
-        .setDescription("時間範圍，如 30m、6h、1d、-3d")
+        .setDescription("時間範圍，如 7d、14d、-3d 2024-01-15")
+        .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("query")
+        .setDescription("搜尋關鍵字或問題")
         .setRequired(true),
     )
     .addStringOption((option) =>
@@ -26,12 +31,13 @@ const command: Command = {
 
   async execute(interaction) {
     const durationStr = interaction.options.getString("duration", true);
+    const query = interaction.options.getString("query", true);
     const dateStr = interaction.options.getString("date");
     const duration = parseDuration(durationStr);
 
     if (!duration) {
       await interaction.reply({
-        content: "❌ 無效的時間格式。請使用如 `30m`、`6h`、`1d`、`-3d` 的格式。",
+        content: "❌ 無效的時間格式。請使用如 `7d`、`14d`、`-3d` 的格式。",
         flags: 64,
       });
       return;
@@ -71,29 +77,22 @@ const command: Command = {
         !m.hasEmbed,
     );
 
-    if (filtered.length < 5) {
-      await interaction.editReply(
-        `⚠️ 該時間範圍內只有 ${filtered.length} 則訊息，不足以產生有意義的摘要。至少需要 5 則。`,
-      );
+    if (filtered.length === 0) {
+      await interaction.editReply("⚠️ 該時間範圍內沒有找到訊息。");
       return;
     }
 
-    const topics = detectTopics(filtered, config.summary.topicGapMinutes);
-
-    const result = await summarizeTopics(topics);
+    const result = await searchMessages(filtered, query);
 
     const channelName =
       "name" in channel && typeof channel.name === "string"
         ? channel.name
         : "unknown";
 
-    const embed = buildSummaryEmbed(
-      result,
-      {
-        start: startMs,
-        end: endMs,
-        label: duration.label,
-      },
+    const embed = buildSearchEmbed(
+      result.results,
+      query,
+      { label: duration.label },
       channelName,
     );
 

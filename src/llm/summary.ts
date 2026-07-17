@@ -34,6 +34,7 @@ export async function summarizeTopics(topics: Topic[]): Promise<SummaryResult> {
 
   const userContent = topicBlocks.join("\n\n");
 
+  const t0 = Date.now();
   const response = await llm.chat.completions.create({
     model: config.openai.model,
     messages: [
@@ -42,6 +43,7 @@ export async function summarizeTopics(topics: Topic[]): Promise<SummaryResult> {
     ],
     response_format: zodResponseFormat(SummarySchema, "summary"),
   });
+  console.log(`[LLM] summary call took ${Date.now() - t0}ms`);
 
   const content = response.choices[0]?.message?.content;
   if (!content) {
@@ -49,10 +51,18 @@ export async function summarizeTopics(topics: Topic[]): Promise<SummaryResult> {
   }
 
   try {
-    const parsed = SummarySchema.parse(JSON.parse(content));
-    return parsed;
-  } catch {
-    console.error("[LLM] Failed to parse summary response");
+    const jsonStr = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    const raw = JSON.parse(jsonStr);
+    const topics = (raw.topics ?? []).map((t: any) => ({
+      title: t.title ?? "Untitled",
+      summary: t.summary ?? "",
+      participants: t.participants ?? [],
+      decisions: t.decisions ?? [],
+      open_questions: t.open_questions ?? t.unresolved_questions ?? t.questions ?? [],
+    }));
+    return { topics };
+  } catch (e) {
+    console.error("[LLM] Failed to parse summary response:", content.slice(0, 300));
     return { topics: [] };
   }
 }

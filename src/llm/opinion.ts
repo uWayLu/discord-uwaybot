@@ -28,6 +28,7 @@ export async function getOpinion(
 
   const userContent = `對話上下文:\n${formattedContext}\n\n使用者問題: ${userQuestion}`;
 
+  const t0 = Date.now();
   const response = await llm.chat.completions.create({
     model: config.openai.model,
     messages: [
@@ -36,6 +37,7 @@ export async function getOpinion(
     ],
     response_format: zodResponseFormat(OpinionSchema, "opinion"),
   });
+  console.log(`[LLM] opinion call took ${Date.now() - t0}ms`);
 
   const content = response.choices[0]?.message?.content;
   if (!content) {
@@ -47,10 +49,15 @@ export async function getOpinion(
   }
 
   try {
-    const parsed = OpinionSchema.parse(JSON.parse(content));
-    return parsed;
+    const jsonStr = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    const raw = JSON.parse(jsonStr);
+    return {
+      opinion: raw.opinion ?? "",
+      references: raw.references ?? [],
+      confidence: typeof raw.confidence === "number" ? raw.confidence : 0,
+    };
   } catch {
-    console.error("[LLM] Failed to parse opinion response");
+    console.error("[LLM] Failed to parse opinion response:", content.slice(0, 300));
     return {
       opinion: "抱歉，回應格式解析失敗。",
       references: [],

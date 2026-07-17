@@ -32,7 +32,7 @@ export const config = {
     model: optional("OPENAI_MODEL", "gemini-3-flash"),
   },
   summary: {
-    maxHours: optionalInt("SUMMARY_MAX_HOURS", 24),
+    maxHours: optionalInt("SUMMARY_MAX_HOURS", 336),
     topicGapMinutes: optionalInt("SUMMARY_TOP_MINUTES", 10),
   },
 } as const;

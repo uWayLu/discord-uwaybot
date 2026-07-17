@@ -4,6 +4,10 @@ import { loadEvents } from "./handlers/events.js";
 import { join } from "node:path";
 import { config } from "./config.js";
 
+process.on("unhandledRejection", (err) => {
+  console.error("[BOT] Unhandled rejection:", err);
+});
+
 const rootDir = join(import.meta.dirname, "..");
 
 client.commands = await loadCommands(join(rootDir, "src", "commands"));
