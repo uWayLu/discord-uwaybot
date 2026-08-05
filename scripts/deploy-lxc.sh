@@ -5,6 +5,7 @@ PVE_HOST="${PVE_HOST:-pve7.lan}"
 CTID="${CTID:-125}"
 APP_DIR="${APP_DIR:-/opt/discord-uwaybot}"
 SERVICE="${SERVICE:-discord-bot}"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 log() { printf '\033[1;36m[deploy]\033[0m %s\n' "$*"; }
 
@@ -14,8 +15,9 @@ Deploy discord-uwaybot to the production LXC via the PVE host.
 
 Usage: scripts/deploy-lxc.sh
 
-Runs in order: git fetch+pull, npm ci, build, db:migrate, deploy commands,
-then restarts the systemd service and verifies it.
+Pushes the committed working tree of this repository directly into the
+container (no GitHub credentials needed inside the LXC), then runs:
+  npm ci -> build -> db:migrate -> deploy commands -> restart, and verifies.
 
 Env overrides:
   PVE_HOST   SSH host of the Proxmox node   (default: pve7.lan)
@@ -28,14 +30,20 @@ fi
 
 if command -v pct >/dev/null 2>&1; then
   run_in_ct() { pct exec "$CTID" -- bash -c "$1"; }
+  push_to_ct() { pct exec "$CTID" -- tar -xf - -C "$APP_DIR"; }
 elif [[ "$(hostname)" == "discord-bot" ]]; then
-  run_in_ct() { bash -c "$1"; }
+  echo "ERR: cannot deploy from inside the container; run from the PVE host or local machine." >&2
+  exit 1
 else
   run_in_ct() {
     local b64
     b64=$(printf '%s' "$1" | base64 | tr -d '\n')
     ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
       "$PVE_HOST" "pct exec $CTID -- bash -c \"echo $b64 | base64 -d | bash\""
+  }
+  push_to_ct() {
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+      "$PVE_HOST" "pct exec '$CTID' -- tar -xf - -C '$APP_DIR'"
   }
 fi
 
@@ -47,11 +55,12 @@ case "$node_ver" in
   v2[0-9]*) : ;;
   *) log "ERROR: need node >=22, got $node_ver" >&2; exit 1 ;;
 esac
-log "node $node_ver"
+log "node $node_ver  (repo: $REPO_DIR)"
 run_in_ct "test -f '$APP_DIR/.env' || { echo 'ERROR: missing $APP_DIR/.env' >&2; exit 1; }"
 
-log "git fetch + pull (ff-only)"
-run_in_ct "cd '$APP_DIR' && git -c safe.directory='$APP_DIR' fetch --prune && git -c safe.directory='$APP_DIR' pull --ff-only"
+git_ref="${DEPLOY_REF:-HEAD}"
+log "push committed tree (${git_ref}) into container"
+git -C "$REPO_DIR" archive --format=tar "$git_ref" | push_to_ct
 
 log "npm ci"
 run_in_ct "cd '$APP_DIR' && npm ci --no-audit --no-fund"
