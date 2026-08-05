@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PVE_HOST="${PVE_HOST:-pve7.lan}"
+CTID="${CTID:-125}"
+APP_DIR="${APP_DIR:-/opt/discord-uwaybot}"
+SERVICE="${SERVICE:-discord-bot}"
+
+log() { printf '\033[1;36m[deploy]\033[0m %s\n' "$*"; }
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  cat <<'EOF'
+Deploy discord-uwaybot to the production LXC via the PVE host.
+
+Usage: scripts/deploy-lxc.sh
+
+Runs in order: git fetch+pull, npm ci, build, db:migrate, deploy commands,
+then restarts the systemd service and verifies it.
+
+Env overrides:
+  PVE_HOST   SSH host of the Proxmox node   (default: pve7.lan)
+  CTID       LXC container id               (default: 125)
+  APP_DIR    project path inside the LXC    (default: /opt/discord-uwaybot)
+  SERVICE    systemd unit name              (default: discord-bot)
+EOF
+  exit 0
+fi
+
+if command -v pct >/dev/null 2>&1; then
+  run_in_ct() { pct exec "$CTID" -- bash -c "$1"; }
+elif [[ "$(hostname)" == "discord-bot" ]]; then
+  run_in_ct() { bash -c "$1"; }
+else
+  run_in_ct() {
+    local b64
+    b64=$(printf '%s' "$1" | base64 | tr -d '\n')
+    ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
+      "$PVE_HOST" "pct exec $CTID -- bash -c \"echo $b64 | base64 -d | bash\""
+  }
+fi
+
+log "target: CT $CTID @ $PVE_HOST, project $APP_DIR, unit $SERVICE"
+
+log "pre-flight: node >=22, .env present"
+node_ver=$(run_in_ct "node --version")
+case "$node_ver" in
+  v2[0-9]*) : ;;
+  *) log "ERROR: need node >=22, got $node_ver" >&2; exit 1 ;;
+esac
+log "node $node_ver"
+run_in_ct "test -f '$APP_DIR/.env' || { echo 'ERROR: missing $APP_DIR/.env' >&2; exit 1; }"
+
+log "git fetch + pull (ff-only)"
+run_in_ct "cd '$APP_DIR' && git -c safe.directory='$APP_DIR' fetch --prune && git -c safe.directory='$APP_DIR' pull --ff-only"
+
+log "npm ci"
+run_in_ct "cd '$APP_DIR' && npm ci --no-audit --no-fund"
+
+log "npm run build"
+run_in_ct "cd '$APP_DIR' && npm run build"
+
+log "npm run db:migrate"
+run_in_ct "cd '$APP_DIR' && npm run db:migrate"
+
+log "npm run deploy (register slash commands)"
+run_in_ct "cd '$APP_DIR' && npm run deploy"
+
+log "systemctl restart $SERVICE"
+run_in_ct "systemctl restart '$SERVICE'"
+sleep 2
+
+state=$(run_in_ct "systemctl is-active '$SERVICE'")
+log "service state: $state"
+if [[ "$state" != "active" ]]; then
+  run_in_ct "journalctl -u '$SERVICE' -n 50 --no-pager" >&2 || true
+  exit 1
+fi
+
+pid=$(run_in_ct "systemctl show '$SERVICE' -p ExecMainPID --value")
+log "pid: $pid"
+log "last logs:"
+run_in_ct "journalctl -u '$SERVICE' -n 15 --no-pager" || true
+log "done"

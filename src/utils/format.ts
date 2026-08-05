@@ -125,3 +125,73 @@ export function buildSearchEmbed(
 
   return embed;
 }
+
+export function buildProfileEmbed(
+  displayName: string,
+  profile: {
+    tone: string;
+    style_features: string[];
+    catchphrases: string[];
+    particles: string[];
+    emoji_habits: string;
+    topics: string[];
+    reply_length: string;
+    punctuation: string;
+    typical_style_sample: string;
+  },
+  sampleCount: number,
+): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle(`🧬 ${displayName} 的說話風格畫像`)
+    .setDescription(`分析自 **${sampleCount}** 則訊息`)
+    .setColor(0x9b59b6)
+    .setTimestamp();
+
+  embed.addFields(
+    { name: "🎭 語氣", value: profile.tone || "—" },
+    { name: "✍️ 用字習慣", value: profile.style_features.join("、") || "—" },
+    {
+      name: "💬 口頭禪",
+      value: profile.catchphrases.map((c) => `「${c}」`).join(" ") || "—",
+    },
+    { name: "🔊 常用語助詞", value: profile.particles.join(" ") || "—" },
+    { name: "😀 表情習慣", value: profile.emoji_habits || "—" },
+    { name: "📚 話題偏好", value: profile.topics.map((t) => `• ${t}`).join("\n") || "—" },
+    { name: "📏 回覆長度", value: profile.reply_length || "—" },
+    { name: "📐 標點習慣", value: profile.punctuation || "—" },
+  );
+
+  if (profile.typical_style_sample) {
+    embed.addFields({
+      name: "🎤 風格範例",
+      value: `> ${profile.typical_style_sample}`,
+    });
+  }
+
+  return embed;
+}
+
+export function buildSimulateEmbed(
+  targetName: string,
+  predictedReply: string,
+  confidence: number,
+  styleFeatures: string[],
+): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle(`🤖 預測回覆 · 非本人發言`)
+    .setDescription(
+      `這是 UwayBot 依 **${targetName}** 的說話風格所做的「預測」，並非本人實際發言。\n\n> ${predictedReply}`,
+    )
+    .setColor(0x5865f2)
+    .setFooter({ text: `信心度: ${Math.round(confidence * 100)}%` })
+    .setTimestamp();
+
+  if (styleFeatures.length > 0) {
+    embed.addFields({
+      name: "🎯 模仿依據",
+      value: styleFeatures.map((f) => `• ${f}`).join("\n"),
+    });
+  }
+
+  return embed;
+}

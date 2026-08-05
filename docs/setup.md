@@ -93,29 +93,35 @@ Set `OPENAI_BASE_URL` to your API endpoint.
 
 ## Production Deployment
 
+> 實際運行環境（LXC CT 125 等）見 [`docs/runtime.md`](runtime.md)。
+
 ### systemd service
 
 ```ini
 [Unit]
-Description=discord-uwaybot
+Description=Discord uWayBot
 After=network.target
 
 [Service]
 Type=simple
-User=botuser
-WorkingDirectory=/path/to/discord-uwaybot
-ExecStart=/usr/bin/node --env-file=.env dist/index.js
+WorkingDirectory=/opt/discord-uwaybot
+ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=5
+EnvironmentFile=/opt/discord-uwaybot/.env
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+- 環境變數由 `EnvironmentFile` 注入，`ExecStart` 不需再加 `--env-file=`（重複指定無效）
+- `ExecStart` 執行 build 後的 `dist/index.js`
+- 專案內含自動化部署腳本：`scripts/deploy-lxc.sh`
 
 ### Build for production
 
 ```bash
 npm run build
 npm run deploy  # Re-deploy commands
-sudo systemctl start discord-uwaybot
+sudo systemctl restart discord-uwaybot
 ```

@@ -1,6 +1,7 @@
 import { Events } from "discord.js";
 import type { Message, TextChannel } from "discord.js";
 import { storeMessage, getRecentMessages } from "../services/message-store.js";
+import { upsertUser } from "../services/user-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { getOpinion } from "../llm/opinion.js";
 import { buildOpinionEmbed } from "../utils/format.js";
@@ -27,6 +28,14 @@ export default {
       createdAt: message.createdTimestamp,
       replyTo: message.reference?.messageId ?? null,
       hasEmbed: message.embeds.length > 0,
+    });
+
+    const displayName =
+      message.member?.displayName ?? message.author.username ?? message.author.id;
+    await upsertUser({
+      id: message.author.id,
+      guildId: message.guild.id,
+      displayName,
     });
 
     const clientUser = message.client.user;

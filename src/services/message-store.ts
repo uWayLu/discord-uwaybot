@@ -1,4 +1,4 @@
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, desc } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { messages } from "../db/schema.js";
 
@@ -59,10 +59,28 @@ export async function getRecentMessages(
     .select()
     .from(messages)
     .where(eq(messages.channelId, channelId))
-    .orderBy(messages.createdAt)
+    .orderBy(desc(messages.createdAt))
     .limit(limit);
 
-  return rows.map((r) => ({
+  return rows.reverse().map((r) => ({
+    ...r,
+    hasEmbed: r.hasEmbed ?? false,
+  }));
+}
+
+export async function getMessagesByUser(
+  userId: string,
+  guildId: string,
+  limit: number = 300,
+): Promise<StoredMessage[]> {
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(and(eq(messages.userId, userId), eq(messages.guildId, guildId)))
+    .orderBy(desc(messages.createdAt))
+    .limit(limit);
+
+  return rows.reverse().map((r) => ({
     ...r,
     hasEmbed: r.hasEmbed ?? false,
   }));
@@ -77,19 +95,21 @@ export async function getMessageById(id: string): Promise<StoredMessage | undefi
   };
 }
 
+export interface MessageInput {
+  id: string;
+  guildId: string;
+  channelId: string;
+  threadId: string | null;
+  userId: string;
+  content: string;
+  createdAt: number;
+  replyTo: string | null;
+  hasEmbed: boolean;
+}
+
 export async function backfillMessages(
   channelId: string,
-  messagesToStore: Array<{
-    id: string;
-    guildId: string;
-    channelId: string;
-    threadId: string | null;
-    userId: string;
-    content: string;
-    createdAt: number;
-    replyTo: string | null;
-    hasEmbed: boolean;
-  }>,
+  messagesToStore: MessageInput[],
 ): Promise<number> {
   let inserted = 0;
   for (const msg of messagesToStore) {
@@ -98,6 +118,22 @@ export async function backfillMessages(
       await db.insert(messages).values(msg);
       inserted++;
     }
+  }
+  return inserted;
+}
+
+export async function backfillMessagesBulk(
+  messagesToStore: MessageInput[],
+): Promise<number> {
+  let inserted = 0;
+  for (let i = 0; i < messagesToStore.length; i += 200) {
+    const batch = messagesToStore.slice(i, i + 200);
+    const result = db
+      .insert(messages)
+      .values(batch)
+      .onConflictDoNothing({ target: messages.id })
+      .run();
+    inserted += Number(result.changes);
   }
   return inserted;
 }

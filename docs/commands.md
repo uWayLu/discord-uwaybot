@@ -73,13 +73,87 @@ Import historical messages from Discord into the local database.
 
 ### Limitations
 
-Discord API limits message fetching to approximately 14 days. Messages older than this cannot be imported via the REST API.
+Discord's message-history endpoint can be paginated arbitrarily far back with the `before` parameter — there is **no 14-day limit** on reading history. The 14-day limit only applies to bulk-delete and search.
 
 ### Examples
 
 ```
 /backfill 14d
 /backfill -3d 2024-01-15
+```
+
+---
+
+## `/backfill-all`
+
+Import historical messages from **all text channels and threads** in the server.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `duration` | No | How far back (`3d`, `7d`, `14d`, `30d`). Omit for full history |
+| `date` | No | Reference date |
+| `mode` | No | `auto` (default), `incremental`, `full` |
+
+- `auto` — resumes from the last cursor (only new messages) if one exists
+- `incremental` — only fetch new messages since the last cursor
+- `full` — force a complete rescan ignoring cursors
+
+Only one job may run per server at a time; duplicate invocations are rejected. Channels are crawled in parallel (concurrency 3) with per-channel rate-limit spacing.
+
+### Examples
+
+```
+/backfill-all
+/backfill-all 7d
+/backfill-all 30d mode:full
+```
+
+---
+
+## `/backfill-status`
+
+Show the status of the latest `/backfill-all` job: status (running/done/failed), channels & threads progress, and messages fetched/inserted.
+
+---
+
+## `/analyze`
+
+Build a structured speaking-style profile for a member.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `user` | Yes | The member to analyze |
+
+Requires at least 10 analyzable messages. Profiles are cached for 7 days and can be refreshed by running the command again.
+
+### Example
+
+```
+/analyze user:@alice
+```
+
+---
+
+## `/simulate`
+
+Predict how a member would reply to the current conversation, imitating their style. The reply is always labeled **「🤖 預測回覆 · 非本人發言」** with a confidence score.
+
+### Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `user` | Yes | The member to imitate (needs a `/analyze` profile first) |
+| `duration` | No | Context time range (`1h`, `1d`...). Default: last 50 messages |
+
+### Examples
+
+```
+/simulate user:@alice
+/simulate user:@bob duration:1h
 ```
 
 ---

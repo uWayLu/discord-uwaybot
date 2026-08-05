@@ -6,7 +6,11 @@ Discord bot for private server message summarization and semantic search. Built 
 
 - **`/summary`** — Summarize channel messages over a time range with topic detection
 - **`/search`** — Semantic search for relevant messages using LLM
-- **`/backfill`** — Import historical messages into the local database
+- **`/backfill`** — Import historical messages into the local database (single channel)
+- **`/backfill-all`** — Import history across the entire server (all channels + threads, with resume cursors)
+- **`/backfill-status`** — Check progress of the running/latest backfill job
+- **`/analyze`** — Build a speaking-style profile for a member
+- **`/simulate`** — Predict how a member would reply, imitating their style (clearly labeled as AI, not the real person)
 - **`@mention`** — Mention the bot for contextual AI responses
 
 ## Prerequisites
@@ -85,11 +89,42 @@ Import historical messages from Discord into the local database.
 - `duration` — How far back to fetch: `3d`, `7d`, `14d`
 - `date` — Reference date (optional)
 
-**Note:** Discord API limits message fetching to ~14 days. Messages older than this cannot be imported via backfill.
+**Note:** Discord's message-history endpoint (`GET /channels/{id}/messages`) can be paginated arbitrarily far back with the `before` parameter — there is **no 14-day limit** on reading history (the 14-day limit only applies to bulk-delete and search). Rate limits are per-channel (~5 requests / 5s), so `/backfill-all` crawls channels in parallel (concurrency 3) with a small delay between pages.
 
 **Examples:**
 - `/backfill 14d` — Import last 14 days
 - `/backfill -3d 2024-01-15` — Import Jan 12–15
+
+### `/backfill-all [duration] [date] [mode]`
+
+Import historical messages from **all text channels and threads** in the server into the local database.
+
+- `duration` — How far back: `3d`, `7d`, `14d`, `30d` (omit for full history)
+- `date` — Reference date (optional)
+- `mode` — `auto` (default; incremental if a resume cursor exists), `incremental` (only new messages), `full` (force a full rescan)
+
+Only one backfill job can run per server at a time; duplicate invocations are rejected. Use `/backfill-status` to check progress.
+
+**Examples:**
+- `/backfill-all` — Import entire server history
+- `/backfill-all 7d` — Import last 7 days
+- `/backfill-all 30d mode:full` — Force a full 30-day rescan
+
+### `/backfill-status`
+
+Show the status of the latest `/backfill-all` job (running/done/failed, channels & threads progress, messages fetched/inserted).
+
+### `/analyze <user>`
+
+Analyze a member's message history and build a structured speaking-style profile (tone, catchphrases, emoji habits, topics, reply length, etc.). Requires at least 10 messages; profiles are cached for 7 days.
+
+### `/simulate <user> [duration]`
+
+Predict how a member would reply to the current conversation, imitating their profile + past similar messages (few-shot retrieval). The result is always labeled **「🤖 預測回覆 · 非本人發言」** with a confidence score, so it is never mistaken for the real person. Requires a profile created via `/analyze` first.
+
+**Examples:**
+- `/simulate user:@alice` — Predict Alice's reply based on the last 50 messages in this channel
+- `/simulate user:@bob duration:1h` — Use the last hour of conversation as context
 
 ### @mention
 
@@ -149,6 +184,11 @@ npm run deploy       # Register slash commands
 npm run db:generate  # Generate migration
 npm run db:migrate   # Run migration
 ```
+
+## Production
+
+- Actual runtime environment (LXC CT 125, systemd, env, deploy/rollback): [`docs/runtime.md`](docs/runtime.md)
+- Automated deploy to the production LXC: [`scripts/deploy-lxc.sh`](scripts/deploy-lxc.sh) (`./scripts/deploy-lxc.sh`)
 
 ## License
 
