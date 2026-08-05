@@ -80,36 +80,40 @@ WantedBy=multi-user.target
 | `SUMMARY_MAX_HOURS` | `336` | summary/search 最大時距 |
 | `SUMMARY_TOP_MINUTES` | `10` | topic 切分間距 |
 
-## 部署現況（2026-08-04）
+## 部署現況（2026-08-05）
 
-> ⚠️ 運行中的是 **舊 build**：master @ `58a1a35`（2026-07-17）。Phase 1–3 的新功能（`/backfill-all`、`/backfill-status`、`/analyze`、`/simulate`、user profiles）**尚未上線**。
-
-- `dist/commands/` 僅有 `summary`、`search`、`backfill`（舊 per-channel）
-- `bot.db` 僅有 `messages`/`summaries`（+ drizzle_migrations），無 `users`/`user_profiles`/`backfill_jobs`/`backfill_cursors`
-- 更新後需跑 migration（`npm run db:migrate`），否則新指令會因缺表失敗
+- ✅ **已部署** `6abcf49`（2026-08-05 佈署完成）：`/backfill-all`、`/backfill-status`、`/analyze`、`/simulate` 全部上線，7 個 guild commands 已註冊
+- ✅ **DB 已遷移**：`bot.db` 含 `users`/`user_profiles`/`backfill_jobs`/`backfill_cursors` + `messages`/`summaries`
+- service `discord-bot` 穩定運行（無 crash loop）
 
 ## 更新部署
 
-完整流程已封裝為 `scripts/deploy-lxc.sh`（於本機經 `ssh pve7.lan` 執行，或用 `pct exec`）：
+完整流程已封裝為 **`scripts/deploy-lxc.sh`**（本機執行 → SSH `pve7.lan` → `pct exec 125`）：
 
 ```bash
-# 手動步驟（等同 deploy-lxc.sh）
+./scripts/deploy-lxc.sh
+```
+
+`deploy-lxc.sh` 執行的動作：
+
+```bash
+# 1. 把本機已 commit 的工作樹直接推入 CT（git archive HEAD → tar → pct exec）
+# 2. CT 內依序執行：
 cd /opt/discord-uwaybot
-git pull
 npm ci
-npm run build          # tsc + 複製 prompts
+npm run build          # tsc + 複製 prompts（cp -r src/prompts/. dist/prompts/）
 npm run db:migrate     # 需要 .env 可被 tsx 讀取
 npm run deploy         # 註冊 slash commands（guild 限定）
 systemctl restart discord-bot
 ```
 
+> **CT 內的 git 非權威來源**：部署採「直接推送檔案」而非 `git pull`（容器沒有 GitHub SSH key，`git pull` 會驗證失敗）。若想在容器內走 `git pull`，需先加一把 GitHub deploy key。
+
 ### 回滾
 
 ```bash
-cd /opt/discord-uwaybot
-git checkout <前一 commit>   # 例如 58a1a35
-npm ci && npm run build
-systemctl restart discord-bot
+# 本機指定舊 commit 再重跑 deploy
+DEPLOY_REF=<前一 commit> ./scripts/deploy-lxc.sh
 ```
 
 > migration 不可逆：回滾舊 build 時若 DB 已含新表，舊程式不認得也無害；若需要完全回到舊 schema 需重建 DB（不建議）。
@@ -146,4 +150,4 @@ node -e 'const d=require("better-sqlite3");const b=new d("data/bot.db");b.backup
 
 ---
 
-*本文件 2026-08-04 依 CT 125 實機查核建立；變動後請同步更新 `scripts/deploy-lxc.sh`。*
+*本文件 2026-08-05 依 CT 125 實機基測更新；變動後請同步更新 `scripts/deploy-lxc.sh`。*
