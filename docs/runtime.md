@@ -109,6 +109,10 @@ systemctl restart discord-bot
 
 > **CT 內的 git 非權威來源**：部署採「直接推送檔案」而非 `git pull`（容器沒有 GitHub SSH key，`git pull` 會驗證失敗）。若想在容器內走 `git pull`，需先加一把 GitHub deploy key。
 
+### 指令註冊的 guild
+
+`npm run deploy` 只會註冊到 `.env` 的 `DISCORD_GUILD_ID`（目前 = 測試 guild `596011153826512956`）。`deploy-lxc.sh` 會**額外**用 `EXTRA_GUILDS`（預設 `595888211742687242` 主 guild）再註冊一次，確保兩邊都有最新指令。要加 guild 用逗號分隔即可。
+
 ### 回滾
 
 ```bash

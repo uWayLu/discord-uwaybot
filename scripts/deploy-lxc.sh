@@ -20,10 +20,12 @@ container (no GitHub credentials needed inside the LXC), then runs:
   npm ci -> build -> db:migrate -> deploy commands -> restart, and verifies.
 
 Env overrides:
-  PVE_HOST   SSH host of the Proxmox node   (default: pve7.lan)
-  CTID       LXC container id               (default: 125)
-  APP_DIR    project path inside the LXC    (default: /opt/discord-uwaybot)
-  SERVICE    systemd unit name              (default: discord-bot)
+  PVE_HOST     SSH host of the Proxmox node   (default: pve7.lan)
+  CTID         LXC container id               (default: 125)
+  APP_DIR      project path inside the LXC    (default: /opt/discord-uwaybot)
+  SERVICE      systemd unit name              (default: discord-bot)
+  EXTRA_GUILDS extra guilds to register slash commands, comma-separated
+               (default: 595888211742687242 = main guild)
 EOF
   exit 0
 fi
@@ -73,6 +75,14 @@ run_in_ct "cd '$APP_DIR' && npm run db:migrate"
 
 log "npm run deploy (register slash commands)"
 run_in_ct "cd '$APP_DIR' && npm run deploy"
+
+EXTRA_GUILDS="${EXTRA_GUILDS:-595888211742687242}"
+if [[ -n "$EXTRA_GUILDS" ]]; then
+  for guild in ${EXTRA_GUILDS//,/ }; do
+    log "register commands for extra guild: $guild"
+    run_in_ct "cd '$APP_DIR' && DISCORD_GUILD_ID='$guild' npm run deploy"
+  done
+fi
 
 log "systemctl restart $SERVICE"
 run_in_ct "systemctl restart '$SERVICE'"
