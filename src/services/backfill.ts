@@ -12,9 +12,10 @@ import { backfillCursors } from "../db/schema.js";
 import { backfillMessagesBulk, type MessageInput } from "./message-store.js";
 import { updateJob, completeJob, setJobPlan } from "./job-store.js";
 
-const CONCURRENCY = 3;
+const CONCURRENCY = 2;
 const PAGE_SIZE = 100;
 const PAGE_DELAY_MS = 250;
+const FLUSH_THRESHOLD = 400;
 
 export interface BackfillOptions {
   startMs: number;
@@ -139,9 +140,34 @@ async function crawlChannelMessages(
   options: BackfillOptions,
   cursor: string | null,
 ): Promise<{ fetched: number; inserted: number; newestId: string | null }> {
-  const all: MessageLike[] = [];
   const useIncremental =
     options.mode !== "full" && cursor !== null && options.endMs >= Date.now() - 60_000;
+
+  const keep = (m: MessageLike): boolean =>
+    useIncremental
+      ? m.createdTimestamp <= options.endMs
+      : m.createdTimestamp >= options.startMs && m.createdTimestamp <= options.endMs;
+
+  const pending: MessageInput[] = [];
+  let fetched = 0;
+  let inserted = 0;
+  let newestId: string | null = null;
+
+  const flush = async (): Promise<void> => {
+    if (pending.length === 0) return;
+    inserted += await backfillMessagesBulk(pending);
+    pending.length = 0;
+  };
+
+  const addPage = async (batch: MessageLike[]): Promise<void> => {
+    for (const m of batch) {
+      if (!keep(m)) continue;
+      const input = toMessageInput(m, guildId, channel.id);
+      if (input) pending.push(input);
+      fetched++;
+    }
+    if (pending.length >= FLUSH_THRESHOLD) await flush();
+  };
 
   if (useIncremental) {
     let done = false;
@@ -155,8 +181,9 @@ async function crawlChannelMessages(
 
       const newest = batch[0]!;
       if (compareId(newest.id, cursor!) <= 0) break;
+      if (newestId === null) newestId = newest.id;
 
-      all.push(...batch.filter((m) => m.createdTimestamp <= options.endMs));
+      await addPage(batch);
 
       const oldest = batch[batch.length - 1]!;
       if (batch.length < PAGE_SIZE) {
@@ -172,12 +199,9 @@ async function crawlChannelMessages(
     while (!done) {
       const batch = await fetchPage(channel, { before: beforeId });
       if (batch.length === 0) break;
+      if (newestId === null) newestId = batch[0]!.id;
 
-      all.push(
-        ...batch.filter(
-          (m) => m.createdTimestamp >= options.startMs && m.createdTimestamp <= options.endMs,
-        ),
-      );
+      await addPage(batch);
 
       const oldest = batch[batch.length - 1]!;
       if (oldest.createdTimestamp < options.startMs || batch.length < PAGE_SIZE) {
@@ -189,18 +213,8 @@ async function crawlChannelMessages(
     }
   }
 
-  all.sort((a, b) => compareId(a.id, b.id));
-  const inputs = all
-    .map((m) => toMessageInput(m, guildId, channel.id))
-    .filter((m): m is MessageInput => m !== null);
-
-  let inserted = 0;
-  if (inputs.length > 0) {
-    inserted = await backfillMessagesBulk(inputs);
-  }
-
-  const newestId = all.length > 0 ? all[all.length - 1]!.id : null;
-  return { fetched: all.length, inserted, newestId };
+  await flush();
+  return { fetched, inserted, newestId };
 }
 
 async function collectThreads(channel: ThreadProvider): Promise<ThreadChannel[]> {

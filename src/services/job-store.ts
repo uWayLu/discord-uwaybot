@@ -43,6 +43,15 @@ export async function getRunningJob(guildId: string): Promise<BackfillJob | unde
   return row as unknown as BackfillJob;
 }
 
+export async function getRunningJobs(): Promise<BackfillJob[]> {
+  const rows = await db
+    .select()
+    .from(backfillJobs)
+    .where(eq(backfillJobs.status, "running"))
+    .all();
+  return rows as unknown as BackfillJob[];
+}
+
 export async function getLatestJob(guildId: string): Promise<BackfillJob | undefined> {
   const row = await db
     .select()
