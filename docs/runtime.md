@@ -94,6 +94,17 @@ WantedBy=multi-user.target
 ./scripts/deploy-lxc.sh
 ```
 
+### 自動部署（pre-push hook）
+
+本機 repo 已設定 `core.hooksPath=scripts/hooks`。**推送 `master` 時會先自動執行 `deploy-lxc.sh`**：
+
+- 部署失敗 → `git push` 會被中止
+- 非 `master` 推播 → 自動略過，不部署
+- 想一律略過：`SKIP_DEPLOY=1 git push ...`
+- 重新啟用/他人clone後：`git config core.hooksPath scripts/hooks`
+
+> hook 檔本身放在 `scripts/hooks/pre-push`（已版本控管），推送的內容即為 `/opt/discord-uwaybot` 要部署的 HEAD。
+
 `deploy-lxc.sh` 執行的動作：
 
 ```bash

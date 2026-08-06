@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Deploy before pushing master: if the deploy fails the push is aborted.
+# Skips non-master pushes; export SKIP_DEPLOY=1 to bypass entirely.
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+
+if [[ "${SKIP_DEPLOY:-0}" == "1" ]]; then
+  echo "[pre-push] SKIP_DEPLOY=1, skipping deployment"
+  exit 0
+fi
+
+deploy_master=false
+while read -r _lref _lsha rref _rsha; do
+  if [[ "$rref" == "refs/heads/master" ]]; then
+    deploy_master=true
+  fi
+done
+
+if [[ "$deploy_master" != "true" ]]; then
+  echo "[pre-push] skipping deployment (not a master push)"
+  exit 0
+fi
+
+echo "[pre-push] running deploy for master"
+"$REPO_DIR/scripts/deploy-lxc.sh"
