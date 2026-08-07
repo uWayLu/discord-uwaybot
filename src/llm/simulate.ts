@@ -37,7 +37,7 @@ export async function predictReply(
     .map((m) => `<${m.userId}> ${m.content}`)
     .join("\n");
 
-  const userContent = `## 使用者畫像\n${JSON.stringify(profile, null, 2)}\n\n## 目前的對話上下文（最後一則之後由你預測回覆）\n${context}\n\n## 該使用者的過去類似訊息範例\n${formatExamples(exampleMessages)}\n\n請預測該使用者接下來最可能說的一句話。`;
+  const userContent = `## 使用者畫像\n${JSON.stringify(profile, null, 2)}\n\n## 強制風格指南（優先於一般描述，逐字沿用）\n${buildStyleGuide(profile)}\n\n## 目前的對話上下文（最後一則之後由你預測回覆）\n${context}\n\n## 該使用者的過去類似訊息範例\n${formatExamples(exampleMessages)}\n\n請預測該使用者接下來最可能說的一句話。`;
 
   return callSimulate(systemPrompt, userContent);
 }
@@ -56,9 +56,31 @@ export async function predictOpinion(
     })
     .join("\n");
 
-  const userContent = `你正在模仿的對象畫像\n${JSON.stringify(profile, null, 2)}\n\n## 目前的對話內容\n${context}\n\n## 該使用者的過去類似訊息範例\n${formatExamples(exampleMessages)}\n\n## 問題\n${question}\n\n請以被模仿使用者的身份回答上述問題。`;
+  const userContent = `你正在模仿的對象畫像\n${JSON.stringify(profile, null, 2)}\n\n## 強制風格指南（優先於一般描述，逐字沿用）\n${buildStyleGuide(profile)}\n\n## 目前的對話內容\n${context}\n\n## 該使用者的過去類似訊息範例\n${formatExamples(exampleMessages)}\n\n## 問題\n${question}\n\n請以被模仿使用者的身份回答上述問題。`;
 
   return callSimulate(questionSystemPrompt, userContent);
+}
+
+function buildStyleGuide(profile: UserProfile): string {
+  const particles = (profile.particles ?? []).filter((x) => x.trim());
+  const catchphrases = (profile.catchphrases ?? []).filter((x) => x.trim());
+  const emojis = (profile.emoji_habits?.match(/<:[^>]+>|\p{Extended_Pictographic}/gu) ?? [])
+    .slice(0, 3)
+    .join(" ");
+
+  const lines: string[] = [];
+  if (profile.tone) lines.push(`- 性格／一貫立場（persona，語氣照此）: ${profile.tone}`);
+  if (profile.topics?.length) lines.push(`- 慣常話題: ${profile.topics.join("；")}`);
+  if (particles.length)
+    lines.push(`- 句尾語助詞（必須至少用一個並逐字保留，不可改成標準語）: ${particles.join("、")}`);
+  if (profile.punctuation)
+    lines.push(`- 標點／用字習慣（盡量照此呈現，不要改成端正書面語）: ${profile.punctuation}`);
+  if (catchphrases.length)
+    lines.push(`- 口頭詞（可擇一自然帶入）: ${catchphrases.join("、")}`);
+  if (emojis) lines.push(`- 表情標籤（語氣處可點綴）: ${emojis}`);
+  if (profile.reply_length)
+    lines.push(`- 回覆長度（依此塑型，不要超出）: ${profile.reply_length}`);
+  return lines.join("\n") || "（無額外風格資訊）";
 }
 
 function formatExamples(exampleMessages: StoredMessage[]): string {
