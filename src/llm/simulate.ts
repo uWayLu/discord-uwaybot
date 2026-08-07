@@ -16,6 +16,11 @@ const systemPrompt = readFileSync(
   "utf-8",
 );
 
+const questionSystemPrompt = readFileSync(
+  join(import.meta.dirname, "..", "prompts", "simulate-question.txt"),
+  "utf-8",
+);
+
 const OUTPUT_FORMAT = `
 {
   "predicted_reply": "以該使用者風格預測的回覆",
@@ -32,15 +37,43 @@ export async function predictReply(
     .map((m) => `<${m.userId}> ${m.content}`)
     .join("\n");
 
-  const examples = exampleMessages
+  const userContent = `## 使用者畫像\n${JSON.stringify(profile, null, 2)}\n\n## 目前的對話上下文（最後一則之後由你預測回覆）\n${context}\n\n## 該使用者的過去類似訊息範例\n${formatExamples(exampleMessages)}\n\n請預測該使用者接下來最可能說的一句話。`;
+
+  return callSimulate(systemPrompt, userContent);
+}
+
+export async function predictOpinion(
+  profile: UserProfile,
+  question: string,
+  contextMessages: StoredMessage[],
+  exampleMessages: StoredMessage[],
+  nameMap?: Map<string, string>,
+): Promise<SimulateResult> {
+  const context = contextMessages
+    .map((m) => {
+      const name = nameMap?.get(m.userId) ?? m.userId;
+      return `<${name}> ${m.content}`;
+    })
+    .join("\n");
+
+  const userContent = `你正在模仿的對象畫像\n${JSON.stringify(profile, null, 2)}\n\n## 目前的對話內容\n${context}\n\n## 該使用者的過去類似訊息範例\n${formatExamples(exampleMessages)}\n\n## 問題\n${question}\n\n請以被模仿使用者的身份回答上述問題。`;
+
+  return callSimulate(questionSystemPrompt, userContent);
+}
+
+function formatExamples(exampleMessages: StoredMessage[]): string {
+  return exampleMessages
     .map((m) => m.content)
     .filter((c) => c.trim().length > 0)
     .slice(0, 10)
     .map((c, i) => `${i + 1}. ${c}`)
     .join("\n");
+}
 
-  const userContent = `## 使用者畫像\n${JSON.stringify(profile, null, 2)}\n\n## 目前的對話上下文（最後一則之後由你預測回覆）\n${context}\n\n## 該使用者的過去類似訊息範例\n${examples}\n\n請預測該使用者接下來最可能說的一句話。`;
-
+async function callSimulate(
+  systemPrompt: string,
+  userContent: string,
+): Promise<SimulateResult> {
   const response = await llm.chat.completions.create({
     model: config.openai.model,
     messages: [

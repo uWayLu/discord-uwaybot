@@ -195,3 +195,28 @@ export function buildSimulateEmbed(
 
   return embed;
 }
+
+export function buildSimulateOpinionEmbed(
+  targetName: string,
+  predictedReply: string,
+  confidence: number,
+  styleFeatures: string[],
+): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle(`🤖 預測 ${targetName} 的看法 · 非本人發言`)
+    .setDescription(
+      `UwayBot 依 **${targetName}** 的說話風格與過去立場，推測他可能這樣回應：\n\n> ${predictedReply}`,
+    )
+    .setColor(0x5865f2)
+    .setFooter({ text: `信心度: ${Math.round(confidence * 100)}%` })
+    .setTimestamp();
+
+  if (styleFeatures.length > 0) {
+    embed.addFields({
+      name: "🎯 模仿依據",
+      value: styleFeatures.map((f) => `• ${f}`).join("\n"),
+    });
+  }
+
+  return embed;
+}
