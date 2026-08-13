@@ -5,6 +5,8 @@ import { upsertUser } from "../services/user-store.js";
 import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { chatReply } from "../llm/chat.js";
+import { chainReply } from "../llm/chain.js";
+import { webSearch } from "../utils/web.js";
 
 export default {
   name: Events.MessageCreate,
@@ -78,6 +80,16 @@ async function handleMention(message: Message) {
       message.content.replace(/<@!?\d+>/g, "").trim() || "你怎麼看？";
 
     const impersonation = await resolveImpersonation(message, nameMap);
+
+    const chain = await maybeChain(question);
+    if (chain && chain.reply) {
+      const text = chain.source
+        ? `${chain.reply}\n— ${chain.source}`
+        : chain.reply;
+      await message.reply(text);
+      return;
+    }
+
     const result = await chatReply(
       context.messages,
       question,
@@ -135,6 +147,27 @@ async function resolveImpersonation(
   // 偵測到模仿對象即使沒有畫像也回傳，讓模型告知可先用 /analyze 建立
   const cached = message.guild ? await getProfile(targetId, message.guild.id) : undefined;
   return cached ? { name: targetName, profile: cached.profile } : { name: targetName };
+}
+
+async function maybeChain(
+  question: string,
+): Promise<{ reply: string; source: string } | null> {
+  const text = question.trim();
+  if (!text) return null;
+  if (text.length < 2 || text.length > 80) return null;
+  if (text.startsWith("/")) return null;
+  if (/\w+:\/\/|https?:\/\//i.test(text)) return null;
+
+  try {
+    const results = await webSearch(text, 5);
+    if (results.length === 0) return null;
+    const result = await chainReply(text, results);
+    if (!result.isQuote || !result.reply.trim()) return null;
+    return { reply: result.reply, source: result.source };
+  } catch (error) {
+    console.error("[CHAIN] Error during chain:", error);
+    return null;
+  }
 }
 
 async function sendChatReplies(

@@ -81,3 +81,73 @@ export function extractUrls(text: string): string[] {
   const matches = text.match(urlRe) ?? [];
   return [...new Set(matches)];
 }
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export async function webSearch(
+  query: string,
+  n: number = 5,
+): Promise<SearchResult[]> {
+  const q = encodeURIComponent(query);
+  const targets = [
+    `https://html.duckduckgo.com/html/?q=${q}`,
+    `https://lite.duckduckgo.com/lite/?q=${q}`,
+  ];
+
+  for (const searchUrl of targets) {
+    try {
+      const res = await fetch(searchUrl, {
+        headers: { "User-Agent": USER_AGENT },
+        redirect: "follow",
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      const parsed = parseSearchResults(html, searchUrl);
+      if (parsed.length > 0) return parsed.slice(0, n);
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+function decodeDdgUrl(href: string): string {
+  if (typeof href !== "string" || !href.includes("duckduckgo.com/l/")) return href;
+  const m = href.match(/uddg=([^&]+)/);
+  return m ? decodeURIComponent(m[1] ?? "") : href;
+}
+
+function parseSearchResults(html: string, sourceUrl: string): SearchResult[] {
+  const results: SearchResult[] = [];
+  const titleRe = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const snippetRe = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
+
+  const titles: Array<{ href: string; text: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = titleRe.exec(html)) !== null) {
+    titles.push({
+      href: m[1] ?? "",
+      text: stripTags(m[2] ?? "").trim(),
+    });
+  }
+
+  const snippets: string[] = [];
+  while ((m = snippetRe.exec(html)) !== null) {
+    snippets.push(stripTags(m[1] ?? "").trim());
+  }
+
+  titles.forEach((t, i) => {
+    if (!t.text) return;
+    results.push({
+      title: t.text,
+      url: decodeDdgUrl(t.href),
+      snippet: snippets[i] ?? "",
+    });
+  });
+  return results;
+}
