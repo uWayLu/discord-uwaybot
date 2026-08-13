@@ -54,9 +54,11 @@ export function shouldRespond(message: Message, replyIsBot: boolean): boolean {
   const score = cached?.score ?? scoreMention(message, replyIsBot);
 
   const c = config.directed;
+  // 明確點名（高分）→ 一定回，不要偶爾漏掉
+  if (score >= c.thresholdHigh) return true;
+
   let p: number;
-  if (score >= c.thresholdHigh) p = c.pHigh;
-  else if (score >= c.thresholdMid) p = c.pMid;
+  if (score >= c.thresholdMid) p = c.pMid;
   else p = c.pLow;
 
   return Math.random() < p;
@@ -65,21 +67,24 @@ export function shouldRespond(message: Message, replyIsBot: boolean): boolean {
 export function cooldownAllowed(message: Message): boolean {
   const now = Date.now();
   const c = config.directed;
-  const ch = message.channelId;
-  const user = message.author.id;
 
-  const lastCh = lastChannelReply.get(ch) ?? 0;
-  const lastUsr = lastUserReply.get(user) ?? 0;
+  const lastCh = lastChannelReply.get(message.channelId) ?? 0;
+  const lastUsr = lastUserReply.get(message.author.id) ?? 0;
 
-  if (now - lastCh < c.cooldownChannelMs) return false;
-  if (now - lastUsr < c.cooldownUserMs) return false;
+  return (
+    now - lastCh >= c.cooldownChannelMs && now - lastUsr >= c.cooldownUserMs
+  );
+}
 
-  lastChannelReply.set(ch, now);
-  lastUserReply.set(user, now);
-  return true;
+function consumeCooldown(message: Message): void {
+  const now = Date.now();
+  lastChannelReply.set(message.channelId, now);
+  lastUserReply.set(message.author.id, now);
 }
 
 export function gateMention(message: Message, replyIsBot: boolean): boolean {
   if (!cooldownAllowed(message)) return false;
-  return shouldRespond(message, replyIsBot);
+  if (!shouldRespond(message, replyIsBot)) return false;
+  consumeCooldown(message);
+  return true;
 }

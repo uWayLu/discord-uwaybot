@@ -16,14 +16,15 @@
 | 陳述句、非開頭提及、非引用 | -0.5 |
 
 ### 採樣機率（`shouldRespond`）
-- `score >= 3` → 0.95
-- `0 <= score < 3` → 0.40
-- `score < 0` → 0.12（偶爾湊熱鬧、像真人）
+- `score >= 3`（明確點名）→ **一定回**（不會偶爾漏掉）
+- `0 <= score < 3` → 0.40（模糊，偶爾回）
+- `score < 0` → 0.12（順帶提及，偶爾湊熱鬧、像真人）
 
 「陳述句」不算「明確對 bot 說話」，落在低機率層。
 
-### Cooldown（`cooldownAllowed`）
-- 每 channel 30s、每 user 20s。接龍與一般聊天共用同一套。
+### Cooldown（`cooldownAllowed` / `consumeCooldown`）
+- 每 channel 30s、每 user 20s。接龍與一般聊天共用。
+- 只在**真正回應時**才消耗 cooldown（未回應不占額度，避免連續 @ 被誤擋）。
 
 ### 接龍（`maybeChain`）
 - 已併入此門控：即使 `@bot` 貼捏他，也要「分數 + 機率 + cooldown」都過才接龍。
