@@ -18,34 +18,38 @@ export default {
     if (message.author.bot) return;
     if (!message.guild) return;
 
-    const ch = message.channel;
-    const threadId =
-      "threadId" in ch ? String(ch.threadId ?? "") || null : null;
+    try {
+      const ch = message.channel;
+      const threadId =
+        "threadId" in ch ? String(ch.threadId ?? "") || null : null;
 
-    await storeMessage({
-      id: message.id,
-      guildId: message.guild.id,
-      channelId: message.channelId,
-      threadId,
-      userId: message.author.id,
-      content: message.content,
-      createdAt: message.createdTimestamp,
-      replyTo: message.reference?.messageId ?? null,
-      hasEmbed: message.embeds.length > 0,
-    });
+      await storeMessage({
+        id: message.id,
+        guildId: message.guild.id,
+        channelId: message.channelId,
+        threadId,
+        userId: message.author.id,
+        content: message.content,
+        createdAt: message.createdTimestamp,
+        replyTo: message.reference?.messageId ?? null,
+        hasEmbed: message.embeds.length > 0,
+      });
 
-    const displayName =
-      message.member?.displayName ?? message.author.username ?? message.author.id;
-    await upsertUser({
-      id: message.author.id,
-      guildId: message.guild.id,
-      displayName,
-    });
+      const displayName =
+        message.member?.displayName ?? message.author.username ?? message.author.id;
+      await upsertUser({
+        id: message.author.id,
+        guildId: message.guild.id,
+        displayName,
+      });
 
-    const clientUser = message.client.user;
-    if (!message.mentions.has(clientUser)) return;
+      const clientUser = message.client.user;
+      if (!message.mentions.has(clientUser)) return;
 
-    await handleMention(message);
+      await handleMention(message);
+    } catch (error) {
+      console.error("[MSG] Error handling message:", error);
+    }
   },
 };
 
