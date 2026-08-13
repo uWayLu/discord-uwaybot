@@ -36,8 +36,8 @@ export const config = {
     topicGapMinutes: optionalInt("SUMMARY_TOP_MINUTES", 10),
   },
   directed: {
-    cooldownChannelMs: optionalInt("DIRECTED_COOLDOWN_CHANNEL_MS", 30_000),
-    cooldownUserMs: optionalInt("DIRECTED_COOLDOWN_USER_MS", 20_000),
+    cooldownChannelMs: optionalInt("DIRECTED_COOLDOWN_CHANNEL_MS", 5_000),
+    cooldownUserMs: optionalInt("DIRECTED_COOLDOWN_USER_MS", 5_000),
     thresholdHigh: optionalInt("DIRECTED_THRESHOLD_HIGH", 3),
     thresholdMid: optionalInt("DIRECTED_THRESHOLD_MID", 0),
     pHigh: optionalInt("DIRECTED_PROB_HIGH", 95) / 100,

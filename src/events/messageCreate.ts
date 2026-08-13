@@ -10,6 +10,7 @@ import { chatReply } from "../llm/chat.js";
 import { referenceReply } from "../llm/reference.js";
 import { searchWithContent } from "../utils/web.js";
 import { searchGif, isExplicitGifRequest, cleanGifQuery, isValidGifKeyword } from "../utils/gif.js";
+import { gifKeyword } from "../llm/gif-keyword.js";
 
 export default {
   name: Events.MessageCreate,
@@ -202,7 +203,8 @@ async function maybeReference(
   if (explicitGif && config.gif.enabled) {
     const q = cleanGifQuery(text);
     if (q) {
-      const urls = await searchGif(q);
+      const keyword = (await gifKeyword(q)) || q;
+      const urls = await searchGif(keyword);
       if (urls.length > 0) {
         return { reply: "", source: "", gifUrl: urls[0] };
       }

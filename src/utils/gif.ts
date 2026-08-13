@@ -57,19 +57,22 @@ function pickUrl(file: any, size: "md" | "sm" | "hd"): string | null {
 const EXPLICIT_GIF_RE =
   /(梗圖|來張圖|丟張圖|來點圖|來張梗圖|丟張梗圖|來張gif|來張表情包|表情包|gif|圖片|meme|梗|張圖|給圖|來圖)/i;
 
+const IMAGE_EXT_RE = /\.(gif|jpe?g|png|webp|mp4)\b/i;
+
 export function isExplicitGifRequest(text: string): boolean {
-  return EXPLICIT_GIF_RE.test(text);
+  return EXPLICIT_GIF_RE.test(text) || IMAGE_EXT_RE.test(text);
 }
 
 const MENTION_OR_URL_RE =
   /<@!?(\d+)>|<@&(\d+)>|https?:\/\/\S+|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
 const GARBAGE_RE = /[^\p{L}\p{N}\s]/gu;
 
-// 剝掉 mention / URL / 表情 / 標點 / 要圖字眼，回傳乾淨的搜尋關鍵字；
+// 剝掉 mention / URL / 表情 / 標點 / 要圖字眼 / 圖片副檔名，回傳乾淨的搜尋關鍵字；
 // 若清完不是有效的關鍵字（<2 個中英文字）則回 null。
 export function cleanGifQuery(text: string): string | null {
   const cleaned = text
     .replace(MENTION_OR_URL_RE, " ")
+    .replace(IMAGE_EXT_RE, " ")
     .replace(EXPLICIT_GIF_RE, " ")
     .replace(GARBAGE_RE, " ")
     .replace(/\s+/g, " ")
