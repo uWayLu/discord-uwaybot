@@ -5,9 +5,11 @@ import { upsertUser } from "../services/user-store.js";
 import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { gateMention } from "../services/directed-gate.js";
+import { config } from "../config.js";
 import { chatReply } from "../llm/chat.js";
 import { referenceReply } from "../llm/reference.js";
 import { searchWithContent } from "../utils/web.js";
+import { searchGif, isExplicitGifRequest } from "../utils/gif.js";
 
 export default {
   name: Events.MessageCreate,
@@ -94,7 +96,7 @@ async function handleMention(message: Message) {
       const text = ref.source
         ? `${ref.reply}\n— ${ref.source}`
         : ref.reply;
-      await message.reply(text);
+      await replyWithGif(message, text, ref.gifUrl);
       return;
     }
 
@@ -180,13 +182,24 @@ function isExplicitSearch(text: string): boolean {
 async function maybeReference(
   question: string,
   authorName: string,
-): Promise<{ reply: string; source: string } | null> {
+): Promise<{ reply: string; source: string; gifUrl?: string } | null> {
   const text = question.trim();
   if (!text) return null;
   if (text.startsWith("/")) return null;
   if (/\w+:\/\/|https?:\/\//i.test(text)) return null;
 
   const explicit = isExplicitSearch(text);
+  const explicitGif = isExplicitGifRequest(text);
+
+  // 明確要圖 → 直接丟 GIF，不走文字參考
+  if (explicitGif && config.gif.enabled) {
+    const q = text.replace(EXPLICIT_GIF_STRIP_RE, "").replace(/\s+/g, " ").trim() || text;
+    const urls = await searchGif(q);
+    if (urls.length > 0) {
+      return { reply: "", source: "", gifUrl: pickGif(urls) };
+    }
+  }
+
   // 只有短句或明確要求搜尋才做網路查證
   if (!explicit && (text.length < 2 || text.length > 80)) return null;
 
@@ -200,12 +213,39 @@ async function maybeReference(
 
     const result = await referenceReply(text, authorName, docs);
     if (!result.shouldReply || !result.reply.trim()) return null;
-    return { reply: result.reply, source: result.source };
+
+    let gifUrl: string | undefined;
+    if (config.gif.enabled && result.gifQuery && Math.random() < config.gif.probability) {
+      const urls = await searchGif(result.gifQuery);
+      if (urls.length > 0) gifUrl = pickGif(urls);
+    }
+
+    return { reply: result.reply, source: result.source, gifUrl };
   } catch (error) {
     console.error("[REF] Error during reference lookup:", error);
     return null;
   }
 }
+
+function pickGif(urls: string[]): string {
+  const gifs = urls.filter((u) => /\.gif(\?.*)?$/i.test(u));
+  const pool = gifs.length > 0 ? gifs : urls;
+  return pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? "";
+}
+
+async function replyWithGif(message: Message, text: string, gifUrl?: string) {
+  if (gifUrl) {
+    await message.reply({
+      content: text,
+      embeds: [{ image: { url: gifUrl } }],
+    });
+  } else {
+    await message.reply(text);
+  }
+}
+
+const EXPLICIT_GIF_STRIP_RE =
+  /(梗圖|來張圖|丟張圖|來點圖|來張梗圖|丟張梗圖|來張gif|來張表情包|表情包|gif|圖片|meme|梗|張圖|給圖|來圖)/gi;
 
 async function sendChatReplies(
   message: Message,

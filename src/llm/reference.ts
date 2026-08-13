@@ -14,6 +14,7 @@ export interface ReferenceResult {
   shouldReply: boolean;
   reply: string;
   source: string;
+  gifQuery: string;
 }
 
 const systemPrompt = readFileSync(
@@ -25,7 +26,8 @@ const OUTPUT_FORMAT = `
 {
   "shouldReply": true,
   "reply": "回應內容",
-  "source": "出自哪部作品／哪個梗"
+  "source": "出自哪部作品／哪個梗",
+  "gifQuery": "要搜 GIF 的關鍵字（非視覺梗則為空字串）"
 }`;
 
 export async function referenceReply(
@@ -53,7 +55,7 @@ export async function referenceReply(
   console.log(`[LLM] reference call took ${Date.now() - t0}ms (len ${question.length})`);
 
   const content = response.choices[0]?.message?.content;
-  if (!content) return { shouldReply: false, reply: "", source: "" };
+  if (!content) return { shouldReply: false, reply: "", source: "", gifQuery: "" };
 
   try {
     const jsonStr = content
@@ -65,9 +67,10 @@ export async function referenceReply(
       shouldReply: raw.shouldReply === true,
       reply: String(raw.reply ?? "").trim(),
       source: String(raw.source ?? "").trim(),
+      gifQuery: String(raw.gifQuery ?? "").trim(),
     };
   } catch (error) {
     console.error("[LLM] Failed to parse reference response:", content.slice(0, 300));
-    return { shouldReply: false, reply: "", source: "" };
+    return { shouldReply: false, reply: "", source: "", gifQuery: "" };
   }
 }

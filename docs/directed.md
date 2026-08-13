@@ -34,6 +34,11 @@
   - 對不上 → 落回 `chatReply` 記憶流。
 - 長問題（>80 字）預設**不搜**，除非含搜尋要求。成本：每次搜尋 +1 `webSearch`＋抓 1 筆內文＋1 次短 LLM（約 +1.5~2.5s）。
 
+### GIF 回覆（KLIPY）
+- `@bot` 偵測到**視覺梗**時，以機率 `GIF_PROB`（預設 20%）抓一張相關 GIF，以「文字 + embed 圖」送出。
+- 使用者**明確要圖**（來張圖／梗圖／gif／表情包…）→ 必定丟 GIF。
+- 由 `src/utils/gif.ts` 呼叫 KLIPY 免費 API（`KLIPY_API_KEY`）。設定：`GIF_ENABLED`、`GIF_PROB`、`GIF_LOCALE`（預設 `tw_TW`）。key 只放 `.env`，不入 repo。
+
 ### 參數
 `src/config.ts` → `directed.*`（cooldown 秒數、門檻、機率），可用 env 覆寫：
 - `DIRECTED_COOLDOWN_CHANNEL_MS`（30_000）
