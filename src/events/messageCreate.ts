@@ -5,7 +5,6 @@ import { upsertUser } from "../services/user-store.js";
 import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { chatReply } from "../llm/chat.js";
-import { chainReply } from "../llm/chain.js";
 
 export default {
   name: Events.MessageCreate,
@@ -39,41 +38,11 @@ export default {
     });
 
     const clientUser = message.client.user;
-    if (message.mentions.has(clientUser)) {
-      await handleMention(message);
-    } else {
-      await maybeChain(message);
-    }
+    if (!message.mentions.has(clientUser)) return;
+
+    await handleMention(message);
   },
 };
-
-const CHAIN_COOLDOWN_MS = 45_000;
-const chainCooldowns = new Map<string, number>();
-
-async function maybeChain(message: Message) {
-  const text = message.content.trim();
-  if (!text) return;
-  if (text.length < 2 || text.length > 120) return;
-  if (text.startsWith("/")) return;
-  if (/https?:\/\//i.test(text)) return;
-
-  const ch = message.channelId;
-  const last = chainCooldowns.get(ch) ?? 0;
-  if (Date.now() - last < CHAIN_COOLDOWN_MS) return;
-  chainCooldowns.set(ch, Date.now());
-
-  try {
-    const recent = (await getRecentMessages(message.channelId, 10)).filter(
-      (m) => m.id !== message.id,
-    );
-    const result = await chainReply(text, recent);
-    if (result.isQuote && result.reply.trim()) {
-      await (message.channel as TextChannel).send(result.reply.trim());
-    }
-  } catch (error) {
-    console.error("[CHAIN] Error handling chain:", error);
-  }
-}
 
 async function handleMention(message: Message) {
   try {
