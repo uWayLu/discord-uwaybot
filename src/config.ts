@@ -35,4 +35,13 @@ export const config = {
     maxHours: optionalInt("SUMMARY_MAX_HOURS", 336),
     topicGapMinutes: optionalInt("SUMMARY_TOP_MINUTES", 10),
   },
+  directed: {
+    cooldownChannelMs: optionalInt("DIRECTED_COOLDOWN_CHANNEL_MS", 30_000),
+    cooldownUserMs: optionalInt("DIRECTED_COOLDOWN_USER_MS", 20_000),
+    thresholdHigh: optionalInt("DIRECTED_THRESHOLD_HIGH", 3),
+    thresholdMid: optionalInt("DIRECTED_THRESHOLD_MID", 0),
+    pHigh: optionalInt("DIRECTED_PROB_HIGH", 95) / 100,
+    pMid: optionalInt("DIRECTED_PROB_MID", 40) / 100,
+    pLow: optionalInt("DIRECTED_PROB_LOW", 12) / 100,
+  },
 } as const;

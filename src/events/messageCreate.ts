@@ -1,9 +1,10 @@
 import { Events } from "discord.js";
 import type { Message, TextChannel } from "discord.js";
-import { storeMessage, getRecentMessages } from "../services/message-store.js";
+import { storeMessage, getRecentMessages, getMessageById } from "../services/message-store.js";
 import { upsertUser } from "../services/user-store.js";
 import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
+import { gateMention } from "../services/directed-gate.js";
 import { chatReply } from "../llm/chat.js";
 import { chainReply } from "../llm/chain.js";
 import { webSearch } from "../utils/web.js";
@@ -48,6 +49,10 @@ export default {
 
 async function handleMention(message: Message) {
   try {
+    const replyIsBot = await isReplyToBot(message);
+
+    if (!gateMention(message, replyIsBot)) return;
+
     if ("sendTyping" in message.channel) {
       await (message.channel as TextChannel).sendTyping().catch(() => {});
     }
@@ -147,6 +152,19 @@ async function resolveImpersonation(
   // 偵測到模仿對象即使沒有畫像也回傳，讓模型告知可先用 /analyze 建立
   const cached = message.guild ? await getProfile(targetId, message.guild.id) : undefined;
   return cached ? { name: targetName, profile: cached.profile } : { name: targetName };
+}
+
+async function isReplyToBot(message: Message): Promise<boolean> {
+  const refId = message.reference?.messageId;
+  if (!refId) return false;
+  const clientUser = message.client.user;
+  if (!clientUser) return false;
+  try {
+    const ref = await getMessageById(refId);
+    return ref?.userId === clientUser.id;
+  } catch {
+    return false;
+  }
 }
 
 async function maybeChain(
