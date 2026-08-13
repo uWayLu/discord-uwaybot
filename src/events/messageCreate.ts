@@ -6,8 +6,8 @@ import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { gateMention } from "../services/directed-gate.js";
 import { chatReply } from "../llm/chat.js";
-import { chainReply } from "../llm/chain.js";
-import { webSearch } from "../utils/web.js";
+import { referenceReply } from "../llm/reference.js";
+import { searchWithContent } from "../utils/web.js";
 
 export default {
   name: Events.MessageCreate,
@@ -86,11 +86,14 @@ async function handleMention(message: Message) {
 
     const impersonation = await resolveImpersonation(message, nameMap);
 
-    const chain = await maybeChain(question);
-    if (chain && chain.reply) {
-      const text = chain.source
-        ? `${chain.reply}\n— ${chain.source}`
-        : chain.reply;
+    const authorName =
+      message.member?.displayName ?? message.author.username ?? message.author.id;
+
+    const ref = await maybeReference(question, authorName);
+    if (ref) {
+      const text = ref.source
+        ? `${ref.reply}\n— ${ref.source}`
+        : ref.reply;
       await message.reply(text);
       return;
     }
@@ -167,23 +170,39 @@ async function isReplyToBot(message: Message): Promise<boolean> {
   }
 }
 
-async function maybeChain(
+const EXPLICIT_SEARCH_RE =
+  /(你)?(找|查|搜|google|search|lookup|查詢|搜尋|找一下|查一下|搜一下)((一下)|(看看))?/i;
+
+function isExplicitSearch(text: string): boolean {
+  return EXPLICIT_SEARCH_RE.test(text);
+}
+
+async function maybeReference(
   question: string,
+  authorName: string,
 ): Promise<{ reply: string; source: string } | null> {
   const text = question.trim();
   if (!text) return null;
-  if (text.length < 2 || text.length > 80) return null;
   if (text.startsWith("/")) return null;
   if (/\w+:\/\/|https?:\/\//i.test(text)) return null;
 
+  const explicit = isExplicitSearch(text);
+  // 只有短句或明確要求搜尋才做網路查證
+  if (!explicit && (text.length < 2 || text.length > 80)) return null;
+
   try {
-    const results = await webSearch(text, 5);
-    if (results.length === 0) return null;
-    const result = await chainReply(text, results);
-    if (!result.isQuote || !result.reply.trim()) return null;
+    const query = explicit
+      ? text.replace(EXPLICIT_SEARCH_RE, " ").replace(/\s+/g, " ").trim() || text
+      : text;
+
+    const docs = await searchWithContent(query, 3);
+    if (docs.length === 0) return null;
+
+    const result = await referenceReply(text, authorName, docs);
+    if (!result.shouldReply || !result.reply.trim()) return null;
     return { reply: result.reply, source: result.source };
   } catch (error) {
-    console.error("[CHAIN] Error during chain:", error);
+    console.error("[REF] Error during reference lookup:", error);
     return null;
   }
 }

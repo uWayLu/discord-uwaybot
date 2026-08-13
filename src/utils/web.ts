@@ -88,6 +88,30 @@ export interface SearchResult {
   snippet: string;
 }
 
+export interface WebDoc extends SearchResult {
+  content?: string;
+}
+
+export async function searchWithContent(
+  query: string,
+  n: number = 3,
+): Promise<WebDoc[]> {
+  const results = await webSearch(query, n);
+  const docs: WebDoc[] = [];
+  for (const r of results) {
+    if (!r.url || /^javascript:/.test(r.url)) continue;
+    const fetched = await fetchUrl(r.url);
+    docs.push({
+      title: r.title,
+      url: r.url,
+      snippet: r.snippet,
+      content: fetched.content || undefined,
+    });
+    break; // 只抓第一筆，控制延遲
+  }
+  return docs;
+}
+
 export async function webSearch(
   query: string,
   n: number = 5,
