@@ -4,7 +4,7 @@ import { storeMessage, getRecentMessages, getMessageById } from "../services/mes
 import { upsertUser } from "../services/user-store.js";
 import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
-import { gateMention } from "../services/directed-gate.js";
+import { gateMention, isBotRoleMentioned } from "../services/directed-gate.js";
 import { config } from "../config.js";
 import { chatReply } from "../llm/chat.js";
 import { referenceReply } from "../llm/reference.js";
@@ -44,7 +44,10 @@ export default {
       });
 
       const clientUser = message.client.user;
-      if (!message.mentions.has(clientUser)) return;
+      const botMentioned =
+        (clientUser != null && message.mentions.has(clientUser)) ||
+        isBotRoleMentioned(message);
+      if (!botMentioned) return;
 
       await handleMention(message);
     } catch (error) {

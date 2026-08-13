@@ -8,6 +8,29 @@ const lastUserReply = new Map<string, number>();
 
 const targets = new WeakMap<Message, { score: number }>();
 
+export function isBotRoleMentioned(message: Message): boolean {
+  const clientUser = message.client.user;
+  if (!clientUser) return false;
+  return message.mentions.roles.some((role) => role.members.has(clientUser.id));
+}
+
+export function isDirectlyAddressed(message: Message): boolean {
+  const clientUser = message.client.user;
+  if (!clientUser) return false;
+
+  const content = message.content;
+  const trimmed = content.trim();
+  const mentionToken = `<@${clientUser.id}>`;
+  const mentionToken2 = `<@!${clientUser.id}>`;
+
+  const firstToken = trimmed.split(/\s+/)[0] ?? "";
+  const lastToken = trimmed.split(/\s+/).slice(-1)[0] ?? "";
+  const isFirstBot = firstToken === mentionToken || firstToken === mentionToken2;
+  const isLastBot = lastToken === mentionToken || lastToken === mentionToken2;
+
+  return isFirstBot || isLastBot || isBotRoleMentioned(message);
+}
+
 export function scoreMention(message: Message, replyIsBot: boolean): number {
   const clientUser = message.client.user;
   if (!clientUser) return 0;
@@ -24,8 +47,8 @@ export function scoreMention(message: Message, replyIsBot: boolean): number {
   const isFirstBot = firstToken === mentionToken || firstToken === mentionToken2;
   const isLastBot = lastToken === mentionToken || lastToken === mentionToken2;
 
-  if (isFirstBot) score += 2;
-  if (isLastBot && QUESTION_RE.test(clean)) score += 2;
+  if (isFirstBot || isLastBot) score += 3; // 直接點名 → 必回
+  if (isBotRoleMentioned(message)) score += 3; // role 包含 bot → 也算點名
 
   if (replyIsBot) score += 3;
 
