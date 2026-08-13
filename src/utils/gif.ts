@@ -32,36 +32,26 @@ export async function searchGif(
   }
 }
 
+// 每個搜尋結果取一張「代表性 GIF」，依相關性排序（第 1 個最相關）。
+// 優先 md（Discord 大小適中）→ sm → hd，只取 .gif。
 function extractGifUrls(json: any): string[] {
-  const urls = new Set<string>();
+  const results = json?.data?.data;
+  if (!Array.isArray(results)) return [];
 
-  const pushUrl = (v: unknown) => {
-    if (typeof v === "string" && /\.(gif|mp4)(\?.*)?$/i.test(v)) urls.add(v);
-  };
+  const urls: string[] = [];
+  for (const item of results) {
+    const file = item?.file;
+    if (!file || typeof file !== "object") continue;
+    const chosen =
+      pickUrl(file, "md") ?? pickUrl(file, "sm") ?? pickUrl(file, "hd");
+    if (chosen) urls.push(chosen);
+  }
+  return urls;
+}
 
-  const walk = (node: any, depth = 0) => {
-    if (!node || depth > 6) return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item, depth + 1);
-      return;
-    }
-    if (typeof node === "object") {
-      const keys = Object.keys(node);
-      // 優先取名含 gif 的欄位，其次直接掃 URL
-      for (const k of keys) {
-        if (/^gif$/i.test(k)) pushUrl(node[k]);
-      }
-      for (const k of keys) {
-        if (/url/i.test(k)) pushUrl(node[k]);
-      }
-      for (const k of keys) {
-        if (typeof node[k] === "object") walk(node[k], depth + 1);
-      }
-    }
-  };
-
-  walk(json);
-  return [...urls];
+function pickUrl(file: any, size: "md" | "sm" | "hd"): string | null {
+  const cand = file?.[size]?.gif?.url;
+  return typeof cand === "string" && /\.gif(\?.*)?$/i.test(cand) ? cand : null;
 }
 
 const EXPLICIT_GIF_RE =
@@ -69,4 +59,26 @@ const EXPLICIT_GIF_RE =
 
 export function isExplicitGifRequest(text: string): boolean {
   return EXPLICIT_GIF_RE.test(text);
+}
+
+const MENTION_OR_URL_RE =
+  /<@!?(\d+)>|<@&(\d+)>|https?:\/\/\S+|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
+const GARBAGE_RE = /[^\p{L}\p{N}\s]/gu;
+
+// 剝掉 mention / URL / 表情 / 標點 / 要圖字眼，回傳乾淨的搜尋關鍵字；
+// 若清完不是有效的關鍵字（<2 個中英文字）則回 null。
+export function cleanGifQuery(text: string): string | null {
+  const cleaned = text
+    .replace(MENTION_OR_URL_RE, " ")
+    .replace(EXPLICIT_GIF_RE, " ")
+    .replace(GARBAGE_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length < 2) return null;
+  if (!/\p{L}/u.test(cleaned)) return null;
+  return cleaned;
+}
+
+export function isValidGifKeyword(q: string): boolean {
+  return q.trim().length >= 2 && /\p{L}/u.test(q);
 }

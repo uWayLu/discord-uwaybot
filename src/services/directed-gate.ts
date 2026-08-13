@@ -1,5 +1,6 @@
 import type { Message } from "discord.js";
 import { config } from "../config.js";
+import { isExplicitGifRequest } from "../utils/gif.js";
 
 const QUESTION_RE = /[？?]|嗎|呢|麻|怎麼|為何|為什麼|啥|覺不覺得|會怎麼|是吧|是嗎|你覺得/;
 
@@ -107,6 +108,11 @@ function consumeCooldown(message: Message): void {
 
 export function gateMention(message: Message, replyIsBot: boolean): boolean {
   if (!cooldownAllowed(message)) return false;
+  // 明確要圖 → 無論位置都觸發（句中 @bot 也要能出 GIF）
+  if (isExplicitGifRequest(message.content)) {
+    consumeCooldown(message);
+    return true;
+  }
   if (!shouldRespond(message, replyIsBot)) return false;
   consumeCooldown(message);
   return true;
