@@ -42,8 +42,8 @@ export async function initFts(): Promise<void> {
 }
 
 function startBackfillWorker(): void {
-  const isProd = import.meta.dirname.endsWith("dist");
-  const workerPath = join(import.meta.dirname, isProd ? "fts-worker.js" : "fts-worker.ts");
+  const ext = import.meta.url.endsWith(".ts") ? "ts" : "js";
+  const workerPath = join(import.meta.dirname, `fts-worker.${ext}`);
   const worker = new Worker(workerPath);
 
   worker.on("message", (msg: { type?: string; done?: number; total?: number; inserted?: number }) => {
