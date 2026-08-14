@@ -11,6 +11,7 @@ import { chatReply } from "../llm/chat.js";
 import { referenceReply } from "../llm/reference.js";
 import { searchWithContent } from "../utils/web.js";
 import { searchGif, isExplicitGifRequest, cleanGifQuery, isValidGifKeyword } from "../utils/gif.js";
+import { detectChatMode } from "../utils/chat-mode.js";
 import { gifKeyword } from "../llm/gif-keyword.js";
 
 startSessionSweep();
@@ -121,6 +122,7 @@ async function handleMention(message: Message) {
       nameMap,
       impersonation,
       getTurns(message.channelId),
+      detectChatMode(question),
     );
 
     await sendChatReplies(message, context.messages, result.replies);

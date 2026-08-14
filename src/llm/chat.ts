@@ -3,8 +3,16 @@ import { config } from "../config.js";
 import type { StoredMessage } from "../services/message-store.js";
 import type { UserProfile } from "./profile.js";
 import type { ChatTurn } from "../services/chat-session.js";
+import type { ChatMode } from "../utils/chat-mode.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+function loadPrompt(file: string): string {
+  return readFileSync(join(import.meta.dirname, "..", "prompts", file), "utf-8");
+}
+
+const systemPrompt = loadPrompt("chat.txt");
+const systemPromptMedium = loadPrompt("chat-medium.txt");
 
 export interface ChatReply {
   content: string;
@@ -14,11 +22,6 @@ export interface ChatReply {
 export interface ChatResult {
   replies: ChatReply[];
 }
-
-const systemPrompt = readFileSync(
-  join(import.meta.dirname, "..", "prompts", "chat.txt"),
-  "utf-8",
-);
 
 const OUTPUT_FORMAT = `
 {
@@ -33,7 +36,9 @@ export async function chatReply(
   nameMap?: Map<string, string>,
   impersonation?: { name: string; profile?: UserProfile } | null,
   sessionTurns: ChatTurn[] = [],
+  mode: ChatMode = "short",
 ): Promise<ChatResult> {
+  const prompt = mode === "medium" ? systemPromptMedium : systemPrompt;
   const labeled = contextMessages.map((m, i) => {
     const name = nameMap?.get(m.userId) ?? m.userId;
     return `[${i}] <${name}> ${m.content}`;
@@ -51,7 +56,7 @@ export async function chatReply(
   const response = await llm.chat.completions.create({
     model: config.openai.model,
     messages: [
-      { role: "system", content: systemPrompt + OUTPUT_FORMAT },
+      { role: "system", content: prompt + OUTPUT_FORMAT },
       ...sessionTurns,
       { role: "user", content: userContent },
     ],
