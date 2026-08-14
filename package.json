@@ -9,6 +9,7 @@
     "build": "tsc && cp -r src/prompts/. dist/prompts/",
     "deploy": "tsx --env-file=.env scripts/deploy-commands.ts",
     "typecheck": "tsc --noEmit",
+    "test": "tsx src/self-test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=.env src/db/migrate.ts"
   },

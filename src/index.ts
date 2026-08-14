@@ -1,6 +1,7 @@
 import { client } from "./client.js";
 import { loadCommands } from "./handlers/commands.js";
 import { loadEvents } from "./handlers/events.js";
+import { initFts } from "./db/fts.js";
 import { join } from "node:path";
 import { config } from "./config.js";
 
@@ -11,6 +12,8 @@ process.on("unhandledRejection", (err) => {
 const rootDir = join(import.meta.dirname, "..");
 const isProd = import.meta.dirname.endsWith("dist");
 const srcDir = isProd ? "dist" : "src";
+
+await initFts();
 
 client.commands = await loadCommands(join(rootDir, srcDir, "commands"));
 await loadEvents(join(rootDir, srcDir, "events"), client);

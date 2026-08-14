@@ -55,4 +55,7 @@ export const config = {
     maxTurns: optionalInt("CHAT_SESSION_MAX_TURNS", 20),
     maxChars: optionalInt("CHAT_SESSION_MAX_CHARS", 8000),
   },
+  searchCount: {
+    defaultDays: optionalInt("SEARCH_COUNT_DEFAULT_DAYS", 30),
+  },
 } as const;
