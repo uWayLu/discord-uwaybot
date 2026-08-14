@@ -2,6 +2,7 @@ import { llm } from "./client.js";
 import { config } from "../config.js";
 import type { StoredMessage } from "../services/message-store.js";
 import type { UserProfile } from "./profile.js";
+import type { ChatTurn } from "../services/chat-session.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -31,6 +32,7 @@ export async function chatReply(
   question: string,
   nameMap?: Map<string, string>,
   impersonation?: { name: string; profile?: UserProfile } | null,
+  sessionTurns: ChatTurn[] = [],
 ): Promise<ChatResult> {
   const labeled = contextMessages.map((m, i) => {
     const name = nameMap?.get(m.userId) ?? m.userId;
@@ -50,6 +52,7 @@ export async function chatReply(
     model: config.openai.model,
     messages: [
       { role: "system", content: systemPrompt + OUTPUT_FORMAT },
+      ...sessionTurns,
       { role: "user", content: userContent },
     ],
   });

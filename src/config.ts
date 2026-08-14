@@ -50,4 +50,9 @@ export const config = {
     probability: optionalInt("GIF_PROB", 20) / 100,
     locale: optional("GIF_LOCALE", "tw_TW"),
   },
+  chatSession: {
+    idleMs: optionalInt("CHAT_SESSION_IDLE_MIN", 30) * 60_000,
+    maxTurns: optionalInt("CHAT_SESSION_MAX_TURNS", 20),
+    maxChars: optionalInt("CHAT_SESSION_MAX_CHARS", 8000),
+  },
 } as const;

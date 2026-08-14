@@ -5,12 +5,15 @@ import { upsertUser } from "../services/user-store.js";
 import { getProfile } from "../services/profile-store.js";
 import { buildOpinionContext } from "../services/context-builder.js";
 import { gateMention, isBotRoleMentioned } from "../services/directed-gate.js";
+import { resetIfIdle, appendUser, appendBot, getTurns, startSessionSweep } from "../services/chat-session.js";
 import { config } from "../config.js";
 import { chatReply } from "../llm/chat.js";
 import { referenceReply } from "../llm/reference.js";
 import { searchWithContent } from "../utils/web.js";
 import { searchGif, isExplicitGifRequest, cleanGifQuery, isValidGifKeyword } from "../utils/gif.js";
 import { gifKeyword } from "../llm/gif-keyword.js";
+
+startSessionSweep();
 
 export default {
   name: Events.MessageCreate,
@@ -94,6 +97,9 @@ async function handleMention(message: Message) {
     const question =
       message.content.replace(/<@!?\d+>/g, "").trim() || "你怎麼看？";
 
+    resetIfIdle(message.channelId);
+    appendUser(message.channelId, question);
+
     const impersonation = await resolveImpersonation(message, nameMap);
 
     const authorName =
@@ -105,6 +111,7 @@ async function handleMention(message: Message) {
         ? `${ref.reply}\n— ${ref.source}`
         : ref.reply;
       await replyWithGif(message, text, ref.gifUrl);
+      appendBot(message.channelId, [text]);
       return;
     }
 
@@ -113,9 +120,14 @@ async function handleMention(message: Message) {
       question,
       nameMap,
       impersonation,
+      getTurns(message.channelId),
     );
 
     await sendChatReplies(message, context.messages, result.replies);
+    appendBot(
+      message.channelId,
+      result.replies.map((r) => r.content),
+    );
   } catch (error) {
     console.error("[MENTION] Error handling mention:", error);
     await message.reply("❌ 處理你的訊息時發生錯誤，請稍後再試。");
