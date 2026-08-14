@@ -123,6 +123,7 @@ async function handleMention(message: Message) {
       impersonation,
       getTurns(message.channelId),
       detectChatMode(question),
+      gatherGuildEmojis(message),
     );
 
     await sendChatReplies(message, context.messages, result.replies);
@@ -265,6 +266,13 @@ async function replyWithGif(message: Message, text: string, gifUrl?: string) {
   } else {
     await message.reply(text);
   }
+}
+
+function gatherGuildEmojis(message: Message): string[] {
+  if (!message.guild) return [];
+  return [...message.guild.emojis.cache.values()]
+    .slice(0, 40)
+    .map((e) => `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`);
 }
 
 async function sendChatReplies(

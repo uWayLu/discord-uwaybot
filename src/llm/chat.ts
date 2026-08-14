@@ -37,6 +37,7 @@ export async function chatReply(
   impersonation?: { name: string; profile?: UserProfile } | null,
   sessionTurns: ChatTurn[] = [],
   mode: ChatMode = "short",
+  guildEmojis: string[] = [],
 ): Promise<ChatResult> {
   const prompt = mode === "medium" ? systemPromptMedium : systemPrompt;
   const labeled = contextMessages.map((m, i) => {
@@ -46,6 +47,10 @@ export async function chatReply(
   const context = labeled.join("\n");
 
   let userContent = `最近的對話上下文（[索引] 放在句首）:\n${context}\n\n使用者的訊息: ${question}`;
+
+  if (guildEmojis.length > 0) {
+    userContent += `\n\n可用伺服器 emoji（只能挑這裡面的）：${guildEmojis.join(" ")}`;
+  }
 
   if (impersonation) {
     userContent += `\n\n## 模仿對象畫像（使用者似乎在問「${impersonation.name}會怎麼說」）\n${impersonation.profile ? JSON.stringify(impersonation.profile, null, 2) : "${impersonation.name} 目前沒有風格畫像。"}`;
