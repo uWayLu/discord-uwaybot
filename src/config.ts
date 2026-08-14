@@ -58,4 +58,7 @@ export const config = {
   searchCount: {
     defaultDays: optionalInt("SEARCH_COUNT_DEFAULT_DAYS", 30),
   },
+  persona: {
+    enabled: optionalInt("PERSONA_ENABLED", 1) === 1,
+  },
 } as const;

@@ -4,12 +4,7 @@ import type { StoredMessage } from "../services/message-store.js";
 import type { UserProfile } from "./profile.js";
 import type { ChatTurn } from "../services/chat-session.js";
 import type { ChatMode } from "../utils/chat-mode.js";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-function loadPrompt(file: string): string {
-  return readFileSync(join(import.meta.dirname, "..", "prompts", file), "utf-8");
-}
+import { loadPrompt } from "../prompts/loader.js";
 
 const systemPrompt = loadPrompt("chat.txt");
 const systemPromptMedium = loadPrompt("chat-medium.txt");

@@ -2,8 +2,7 @@ import { llm } from "./client.js";
 import { config } from "../config.js";
 import type { StoredMessage } from "../services/message-store.js";
 import { formatMessagesForLLM } from "../services/context-builder.js";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { loadPrompt } from "../prompts/loader.js";
 
 export type OpinionResult = {
   opinion: string;
@@ -11,10 +10,7 @@ export type OpinionResult = {
   confidence: number;
 };
 
-const systemPrompt = readFileSync(
-  join(import.meta.dirname, "..", "prompts", "opinion.txt"),
-  "utf-8",
-);
+const systemPrompt = loadPrompt("opinion.txt");
 
 const OUTPUT_FORMAT = `
 
