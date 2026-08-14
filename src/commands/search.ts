@@ -18,15 +18,15 @@ const command: Command = {
     .setDescription("搜尋頻道中的相關訊息，或統計一段時間內某關鍵字被提到的次數")
     .addStringOption((option) =>
       option
-        .setName("duration")
-        .setDescription("時間範圍，如 7d、14d、-3d 2024-01-15；計數模式可用 all（省略=30 天）")
-        .setRequired(false),
-    )
-    .addStringOption((option) =>
-      option
         .setName("query")
         .setDescription("搜尋關鍵字或問題")
         .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("duration")
+        .setDescription("時間範圍，如 7d、14d、-3d 2024-01-15；計數模式可用 all（省略=30 天）")
+        .setRequired(false),
     )
     .addStringOption((option) =>
       option
