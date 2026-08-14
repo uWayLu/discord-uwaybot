@@ -1,5 +1,7 @@
 import { db } from "./index.js";
 import type Database from "better-sqlite3";
+import { Worker } from "node:worker_threads";
+import { join } from "node:path";
 
 const FTS_TABLE = "messages_fts";
 
@@ -22,24 +24,11 @@ CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
 END;
 `;
 
-const FETCH_STALE_BATCH_SQL = `
-SELECT m.rowid, m.id, m.guild_id, m.channel_id, m.user_id, m.created_at, m.content
-FROM messages m
-WHERE NOT EXISTS (SELECT 1 FROM ${FTS_TABLE} f WHERE f.id = m.id)
-LIMIT ?
-`;
-
-const INSERT_BATCH_SQL = `
-INSERT OR IGNORE INTO ${FTS_TABLE}(id, guild_id, channel_id, user_id, created_at, content)
-VALUES (@id, @guild_id, @channel_id, @user_id, @created_at, @content)
-`;
-
-const BATCH_SIZE = 2000;
-
 let initialized = false;
 
 /**
- * 建立 FTS5 表與同步 trigger，並回填既有 messages（非阻塞）。
+ * 建立 FTS5 表與同步 trigger，並在 worker thread 中非阻塞地回填既有 messages。
+ * 回填跑在獨立執行緒 + 批次 commit，不會卡住主事件迴圈，進度也可續跑。
  */
 export async function initFts(): Promise<void> {
   if (initialized) return;
@@ -49,56 +38,35 @@ export async function initFts(): Promise<void> {
   client.exec(CREATE_TRIGGER_SQL);
   initialized = true;
 
-  // 非阻塞回填
-  setTimeout(() => {
-    try {
-      backfillFts();
-    } catch (error) {
-      console.error("[FTS] backfill failed:", error);
+  startBackfillWorker();
+}
+
+function startBackfillWorker(): void {
+  const isProd = import.meta.dirname.endsWith("dist");
+  const workerPath = join(import.meta.dirname, isProd ? "fts-worker.js" : "fts-worker.ts");
+  const worker = new Worker(workerPath);
+
+  worker.on("message", (msg: { type?: string; done?: number; total?: number; inserted?: number }) => {
+    if (msg?.type === "progress") {
+      console.log(`[FTS] backfill ${msg.done}/${msg.total}...`);
+    } else if (msg?.type === "done") {
+      console.log(`[FTS] backfill complete, +${msg.inserted ?? 0} rows (${msg.total ?? 0} total)`);
     }
-  }, 1000);
+  });
+  worker.on("error", (err) => console.error("[FTS] backfill worker error:", err));
+  worker.on("exit", (code) => {
+    if (code !== 0) console.error(`[FTS] backfill worker exited with code ${code}`);
+  });
 }
 
 function ftsCount(client: Database.Database): number {
-  const row = client.prepare(`SELECT count(*) AS c FROM ${FTS_TABLE}`).get() as {
-    c: number;
-  };
+  const row = client.prepare(`SELECT count(*) AS c FROM ${FTS_TABLE}`).get() as { c: number } | undefined;
   return row?.c ?? 0;
 }
 
 function messagesCount(client: Database.Database): number {
-  const row = client.prepare(`SELECT count(*) AS c FROM messages`).get() as {
-    c: number;
-  };
+  const row = client.prepare(`SELECT count(*) AS c FROM messages`).get() as { c: number } | undefined;
   return row?.c ?? 0;
-}
-
-export function backfillFts(): void {
-  const client = db.$client;
-  const stale = messagesCount(client) - ftsCount(client);
-  if (stale <= 0) {
-    console.log("[FTS] index up to date");
-    // 每週優化一次（封存空頁，對 contentless 有用）
-    client.exec(`INSERT INTO ${FTS_TABLE}(${FTS_TABLE}) VALUES('optimize')`);
-    return;
-  }
-
-  console.log(`[FTS] backfilling ${stale} stale rows...`);
-  const fetchBatch = client.prepare(FETCH_STALE_BATCH_SQL);
-  const insertBatch = client.prepare(INSERT_BATCH_SQL);
-  let done = 0;
-
-  const tx = client.transaction(() => {
-    let rows = fetchBatch.all(BATCH_SIZE) as Array<Record<string, unknown>>;
-    while (rows.length > 0) {
-      for (const r of rows) insertBatch.run(r);
-      done += rows.length;
-      rows = fetchBatch.all(BATCH_SIZE) as Array<Record<string, unknown>>;
-    }
-  });
-  tx();
-
-  console.log(`[FTS] backfill complete, +${done} rows`);
 }
 
 export function ftsIndexReady(): boolean {
@@ -107,15 +75,5 @@ export function ftsIndexReady(): boolean {
     return ftsCount(client) >= messagesCount(client) - 10;
   } catch {
     return false;
-  }
-}
-
-// 測試用
-export function _ensureFtsInitializedForTest(): void {
-  if (!initialized) {
-    const client = db.$client;
-    client.exec(CREATE_FTS_SQL);
-    client.exec(CREATE_TRIGGER_SQL);
-    initialized = true;
   }
 }

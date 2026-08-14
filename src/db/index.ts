@@ -5,7 +5,7 @@ import { mkdirSync } from "node:fs";
 import * as schema from "./schema.js";
 
 const DB_DIR = join(import.meta.dirname, "..", "..", "data");
-const DB_PATH = join(DB_DIR, "bot.db");
+export const DB_PATH = join(DB_DIR, "bot.db");
 
 mkdirSync(DB_DIR, { recursive: true });
 
