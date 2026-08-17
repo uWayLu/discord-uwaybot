@@ -100,16 +100,15 @@ export async function chatReply(
       })
       .filter((r: ChatReply | null): r is ChatReply => r !== null);
 
-    if (replies.length === 0) {
-      return {
-        replies: [{ content: "抱歉，我沒讀懂這裡在聊什麼。", messageIndex: null }],
-      };
-    }
-    return { replies };
+    if (replies.length > 0) return { replies };
   } catch (error) {
     console.error("[LLM] Failed to parse chat response:", content.slice(0, 300));
-    return {
-      replies: [{ content: "抱歉，我沒讀懂這裡在聊什麼。", messageIndex: null }],
-    };
   }
+
+  // 模型可能直接回純文字而非 JSON：直接當作回覆，不要丟掉
+  const plainText = content.trim();
+  if (plainText) {
+    return { replies: [{ content: plainText, messageIndex: null }] };
+  }
+  return { replies: [{ content: "抱歉，我沒讀懂這裡在聊什麼。", messageIndex: null }] };
 }
