@@ -26,12 +26,16 @@ export async function getOpinion(
   userQuestion: string,
   webContent: string = "",
   nameMap?: Map<string, string>,
+  ragBlock?: string,
 ): Promise<OpinionResult> {
   const formattedContext = formatMessagesForLLM(contextMessages, nameMap);
 
   let userContent = `對話上下文:\n${formattedContext}\n\n使用者問題: ${userQuestion}`;
   if (webContent) {
     userContent += `\n\n以下是使用者提到的網頁內容:\n${webContent}`;
+  }
+  if (ragBlock) {
+    userContent += `\n\n${ragBlock}`;
   }
   console.log("[LLM] opinion user content length:", userContent.length, "webContent:", webContent ? `${webContent.length} chars` : "none");
 

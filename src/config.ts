@@ -61,4 +61,11 @@ export const config = {
   persona: {
     enabled: optionalInt("PERSONA_ENABLED", 1) === 1,
   },
+  rag: {
+    enabled: optionalInt("RAG_ENABLED", 1) === 1,
+    topK: optionalInt("RAG_TOP_K", 6),
+    rangeDays: optionalInt("RAG_RANGE_DAYS", 0),
+    minQueryChars: optionalInt("RAG_MIN_QUERY_CHARS", 2),
+    bm25Threshold: optionalInt("RAG_BM25_THRESHOLD", 0),
+  },
 } as const;

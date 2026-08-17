@@ -8,6 +8,7 @@ import { countMentions } from "../services/fts-count.js";
 import { ftsIndexReady } from "../db/fts.js";
 import { getDisplayName } from "../services/user-store.js";
 import { parseDuration, parseOptionalDate } from "../utils/time.js";
+import { retrieveRagContext } from "../services/rag-retrieval.js";
 import { config } from "../config.js";
 
 const TOP_COUNT_DISPLAY = 10;
@@ -135,7 +136,12 @@ const command: Command = {
       return;
     }
 
-    const result = await searchMessages(filtered, query);
+    const rag =
+      filtered.length > 0
+        ? await retrieveRagContext(query, filtered, interaction.guild)
+        : null;
+
+    const result = await searchMessages(filtered, query, rag?.block);
 
     const channelName =
       "name" in channel && typeof channel.name === "string"

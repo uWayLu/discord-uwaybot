@@ -5,6 +5,7 @@ import { buildOpinionContext } from "../services/context-builder.js";
 import { getOpinion } from "../llm/opinion.js";
 import { buildOpinionEmbed } from "../utils/format.js";
 import { extractUrls, fetchUrl } from "../utils/web.js";
+import { retrieveRagContext } from "../services/rag-retrieval.js";
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -81,7 +82,18 @@ const command: Command = {
         .join("\n\n---\n\n");
     }
 
-    const result = await getOpinion(contextMessages, question, webContent, nameMap);
+    const rag =
+      interaction.guild && recentMessages.length > 0
+        ? await retrieveRagContext(question, recentMessages, interaction.guild)
+        : null;
+
+    const result = await getOpinion(
+      contextMessages,
+      question,
+      webContent,
+      nameMap,
+      rag?.block,
+    );
 
     const embed = buildOpinionEmbed(
       result.opinion,

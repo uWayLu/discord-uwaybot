@@ -33,6 +33,7 @@ export async function chatReply(
   sessionTurns: ChatTurn[] = [],
   mode: ChatMode = "short",
   guildEmojis: string[] = [],
+  ragBlock?: string,
 ): Promise<ChatResult> {
   const prompt = mode === "medium" ? systemPromptMedium : systemPrompt;
   const labeled = contextMessages.map((m, i) => {
@@ -49,6 +50,10 @@ export async function chatReply(
 
   if (impersonation) {
     userContent += `\n\n## 模仿對象畫像（使用者似乎在問「${impersonation.name}會怎麼說」）\n${impersonation.profile ? JSON.stringify(impersonation.profile, null, 2) : "${impersonation.name} 目前沒有風格畫像。"}`;
+  }
+
+  if (ragBlock) {
+    userContent += `\n\n${ragBlock}`;
   }
   console.log("[LLM] chat user content length:", userContent.length);
 

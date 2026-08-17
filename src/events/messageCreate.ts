@@ -13,6 +13,7 @@ import { searchWithContent } from "../utils/web.js";
 import { searchGif, isExplicitGifRequest, cleanGifQuery, isValidGifKeyword } from "../utils/gif.js";
 import { detectChatMode } from "../utils/chat-mode.js";
 import { gifKeyword } from "../llm/gif-keyword.js";
+import { retrieveRagContext } from "../services/rag-retrieval.js";
 
 startSessionSweep();
 
@@ -116,6 +117,10 @@ async function handleMention(message: Message) {
       return;
     }
 
+    const rag = message.guild
+      ? await retrieveRagContext(question, recentMessages, message.guild)
+      : null;
+
     const result = await chatReply(
       context.messages,
       question,
@@ -124,6 +129,7 @@ async function handleMention(message: Message) {
       getTurns(message.channelId),
       detectChatMode(question),
       gatherGuildEmojis(message),
+      rag?.block,
     );
 
     await sendChatReplies(message, context.messages, result.replies);

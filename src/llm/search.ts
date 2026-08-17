@@ -40,10 +40,14 @@ const OUTPUT_FORMAT = `
 export async function searchMessages(
   messages: StoredMessage[],
   query: string,
+  ragBlock?: string,
 ): Promise<SearchResult> {
   const formatted = formatMessagesForLLM(messages);
 
-  const userContent = `使用者查詢: ${query}\n\n訊息內容:\n${formatted}`;
+  let userContent = `使用者查詢: ${query}\n\n訊息內容:\n${formatted}`;
+  if (ragBlock) {
+    userContent += `\n\n${ragBlock}`;
+  }
 
   const t0 = Date.now();
   const response = await llm.chat.completions.create({
