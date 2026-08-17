@@ -96,26 +96,29 @@ async function handleMention(message: Message) {
 
     const context = buildOpinionContext(recentMessages, repliedId, threadId);
 
-    const question =
-      message.content.replace(/<@!?\d+>/g, "").trim() || "你怎麼看？";
+    const questionRaw = message.content.replace(/<@!?\d+>/g, "").trim();
 
     resetIfIdle(message.channelId);
-    appendUser(message.channelId, question);
+    appendUser(message.channelId, questionRaw || "你怎麼看？");
 
     const impersonation = await resolveImpersonation(message, nameMap);
 
     const authorName =
       message.member?.displayName ?? message.author.username ?? message.author.id;
 
-    const ref = await maybeReference(question, authorName);
-    if (ref) {
-      const text = ref.source
-        ? `${ref.reply}\n— ${ref.source}`
-        : ref.reply;
-      await replyWithGif(message, text, ref.gifUrl);
-      appendBot(message.channelId, [text]);
-      return;
+    // 明確要圖 → 直接出圖（memes.tw + LLM 選圖），不再吃本機回答
+    if (config.gif.enabled && isExplicitGifRequest(message.content)) {
+      const q = cleanGifQuery(message.content);
+      if (q) {
+        const urls = await searchGif(q);
+        if (urls.length > 0) {
+          await replyWithGif(message, "", urls[0]);
+          return;
+        }
+      }
     }
+
+    const question = questionRaw || "你怎麼看？";
 
     const rag = message.guild
       ? await retrieveRagContext(question, recentMessages, message.guild)
@@ -131,6 +134,19 @@ async function handleMention(message: Message) {
       gatherGuildEmojis(message),
       rag?.block,
     );
+
+    // 本機優先：非空問句才視內容決定是否網路查證
+    if (questionRaw !== "" && shouldWebCheck(question)) {
+      const ref = await maybeReference(question, authorName);
+      if (ref) {
+        const text = ref.source
+          ? `${ref.reply}\n— ${ref.source}`
+          : ref.reply;
+        await replyWithGif(message, text, ref.gifUrl);
+        appendBot(message.channelId, [text]);
+        return;
+      }
+    }
 
     await sendChatReplies(message, context.messages, result.replies);
     appendBot(
@@ -206,6 +222,17 @@ const EXPLICIT_SEARCH_RE =
 
 function isExplicitSearch(text: string): boolean {
   return EXPLICIT_SEARCH_RE.test(text);
+}
+
+const FACTUAL_RE =
+  /(天氣|新聞|最新|價格|多少|幾點|日期|今天|明天|票房|比分|賽況|排名|股價|匯率|誰|是什麼|哪裡|幾月|幾日|幾人|時事|消息|進度|版本|版號|下載|多少錢)/;
+
+// 依問句內容判斷是否需要網路查證（明確搜尋字眼，或短事實型問句）。
+function shouldWebCheck(text: string): boolean {
+  if (text.startsWith("/")) return false;
+  if (/\w+:\/\/|https?:\/\//i.test(text)) return false;
+  if (isExplicitSearch(text)) return true;
+  return text.length >= 2 && text.length <= 80 && FACTUAL_RE.test(text);
 }
 
 async function maybeReference(

@@ -45,10 +45,9 @@ export const config = {
     pLow: optionalInt("DIRECTED_PROB_LOW", 12) / 100,
   },
   gif: {
-    klipyApiKey: optional("KLIPY_API_KEY", ""),
     enabled: optionalInt("GIF_ENABLED", 1) === 1,
     probability: optionalInt("GIF_PROB", 20) / 100,
-    locale: optional("GIF_LOCALE", "tw_TW"),
+    contest: optional("MEMES_CONTEST", ""),
   },
   chatSession: {
     idleMs: optionalInt("CHAT_SESSION_IDLE_MIN", 30) * 60_000,

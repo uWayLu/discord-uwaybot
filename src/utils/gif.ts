@@ -1,19 +1,19 @@
 import { config } from "../config.js";
+import { selectMeme } from "../llm/meme-select.js";
 
-export async function searchGif(
-  query: string,
-  locale: string = config.gif.locale,
-): Promise<string[]> {
-  const key = config.gif.klipyApiKey;
-  if (!key) return [];
+/**
+ * 從 memes.tw 熱門 feed 挑一張語意最符合 query 的梗圖，回傳其網址；
+ * 無符合或失敗回傳空陣列。
+ */
+export async function searchGif(query: string): Promise<string[]> {
   if (!query.trim()) return [];
 
-  const url =
-    `https://api.klipy.com/api/v1/${key}/gifs/search` +
-    `?q=${encodeURIComponent(query)}` +
-    `&locale=${encodeURIComponent(locale)}` +
-    `&per_page=8`;
+  let url = "https://memes.tw/wtf/api";
+  if (config.gif.contest) {
+    url += `?contest=${encodeURIComponent(config.gif.contest)}`;
+  }
 
+  let json: unknown;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "discord-uwaybot" },
@@ -21,58 +21,68 @@ export async function searchGif(
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
-      console.warn("[GIF] KLIPY HTTP", res.status);
+      console.warn("[GIF] MEMES.TW HTTP", res.status);
       return [];
     }
-    const json = await res.json();
-    return extractGifUrls(json);
+    json = await res.json();
   } catch (e) {
-    console.error("[GIF] KLIPY error:", (e as Error).message);
+    console.error("[GIF] MEMES.TW error:", (e as Error).message);
     return [];
   }
-}
 
-// 每個搜尋結果取一張「代表性 GIF」，依相關性排序（第 1 個最相關）。
-// 優先 md（Discord 大小適中）→ sm → hd，只取 .gif。
-function extractGifUrls(json: any): string[] {
-  const results = json?.data?.data;
-  if (!Array.isArray(results)) return [];
+  const list = Array.isArray(json) ? json : [];
+  const srcById = new Map<number, string>();
+  const candidates: Array<{
+    id: number;
+    title: string;
+    hashtag: string;
+    contest: string;
+  }> = [];
 
-  const urls: string[] = [];
-  for (const item of results) {
-    const file = item?.file;
-    if (!file || typeof file !== "object") continue;
-    const chosen =
-      pickUrl(file, "md") ?? pickUrl(file, "sm") ?? pickUrl(file, "hd");
-    if (chosen) urls.push(chosen);
+  for (const item of list) {
+    const id = Number(item?.id);
+    const src = item?.src;
+    if (Number.isNaN(id) || typeof src !== "string" || !isImageUrl(src)) continue;
+    if (srcById.has(id)) continue;
+    srcById.set(id, src);
+    candidates.push({
+      id,
+      title: typeof item?.title === "string" ? item.title : "",
+      hashtag: typeof item?.hashtag === "string" ? item.hashtag : "",
+      contest:
+        typeof item?.contest?.name === "string" ? item.contest.name : "",
+    });
   }
-  return urls;
+
+  const chosen = await selectMeme(query, candidates, srcById);
+  return chosen ? [chosen] : [];
 }
 
-function pickUrl(file: any, size: "md" | "sm" | "hd"): string | null {
-  const cand = file?.[size]?.gif?.url;
-  return typeof cand === "string" && /\.gif(\?.*)?$/i.test(cand) ? cand : null;
+const IMAGE_EXT_RE = /\.(gif|jpe?g|png|webp)(\?.*)?$/i;
+
+function isImageUrl(url: string): boolean {
+  return IMAGE_EXT_RE.test(url);
 }
 
 const EXPLICIT_GIF_RE =
   /(梗圖|來張圖|丟張圖|來點圖|來張梗圖|丟張梗圖|來張gif|來張表情包|表情包|gif|圖片|meme|梗|張圖|給圖|來圖)/i;
 
-const IMAGE_EXT_RE = /\.(gif|jpe?g|png|webp|mp4)\b/i;
+const IMAGE_EXT_RE2 = /\.(gif|jpe?g|png|webp|mp4)\b/i;
 
 export function isExplicitGifRequest(text: string): boolean {
-  return EXPLICIT_GIF_RE.test(text) || IMAGE_EXT_RE.test(text);
+  return EXPLICIT_GIF_RE.test(text) || IMAGE_EXT_RE2.test(text);
 }
 
 const MENTION_OR_URL_RE =
   /<@!?(\d+)>|<@&(\d+)>|https?:\/\/\S+|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu;
 const GARBAGE_RE = /[^\p{L}\p{N}\s]/gu;
 
-// 剝掉 mention / URL / 表情 / 標點 / 要圖字眼 / 圖片副檔名，回傳乾淨的搜尋關鍵字；
-// 若清完不是有效的關鍵字（<2 個中英文字）則回 null。
+// 剝掉 mention / URL / 表情 / 標點 / 要圖字眼 / 圖片副檔名，回傳乾淨的請求語意；
+// 若清完不是有效內容（<2 個中英文字）則回 null。
 export function cleanGifQuery(text: string): string | null {
   const cleaned = text
     .replace(MENTION_OR_URL_RE, " ")
-    .replace(IMAGE_EXT_RE, " ")
+    .replace(IMAGE_EXT_RE2, " ")
     .replace(EXPLICIT_GIF_RE, " ")
     .replace(GARBAGE_RE, " ")
     .replace(/\s+/g, " ")
