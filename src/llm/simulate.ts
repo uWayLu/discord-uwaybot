@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { getActiveModel } from "./model-router.js";
+import { getModel } from "./model-router.js";
 import type { StoredMessage } from "../services/message-store.js";
 import type { UserProfile } from "./profile.js";
 import { readFileSync } from "node:fs";
@@ -97,7 +97,7 @@ async function callSimulate(
   userContent: string,
 ): Promise<SimulateResult> {
   const response = await llm.chat.completions.create({
-    model: getActiveModel(),
+    model: getModel("core"),
     messages: [
       { role: "system", content: systemPrompt + OUTPUT_FORMAT },
       { role: "user", content: userContent },

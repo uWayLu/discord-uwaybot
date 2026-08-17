@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { getActiveModel } from "./model-router.js";
+import { getModel } from "./model-router.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -46,7 +46,7 @@ export async function referenceReply(
 
   const t0 = Date.now();
   const response = await llm.chat.completions.create({
-    model: getActiveModel(),
+    model: getModel("light"),
     messages: [
       { role: "system", content: systemPrompt + OUTPUT_FORMAT },
       { role: "user", content: userContent },

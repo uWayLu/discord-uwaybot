@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { getActiveModel } from "./model-router.js";
+import { getModel } from "./model-router.js";
 
 const SYSTEM = `你是 GIF 搜尋關鍵字轉換器。使用者給一個「迷因／梗」的關鍵字或句子，請回傳一個**最可能在英文 GIF 站（Tenor／Giphy）找到該梗 GIF 的英文或羅馬拼音關鍵字**。
 
@@ -14,7 +14,7 @@ export async function gifKeyword(query: string): Promise<string> {
   if (!q) return "";
   try {
     const response = await llm.chat.completions.create({
-      model: getActiveModel(),
+      model: getModel("light"),
       messages: [
         { role: "system", content: SYSTEM },
         { role: "user", content: q },

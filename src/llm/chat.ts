@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { getActiveModel } from "./model-router.js";
+import { getModel } from "./model-router.js";
 import type { StoredMessage } from "../services/message-store.js";
 import type { UserProfile } from "./profile.js";
 import type { ChatTurn } from "../services/chat-session.js";
@@ -59,7 +59,7 @@ export async function chatReply(
 
   const t0 = Date.now();
   const response = await llm.chat.completions.create({
-    model: getActiveModel(),
+    model: getModel("core"),
     messages: [
       { role: "system", content: prompt + OUTPUT_FORMAT },
       ...sessionTurns,

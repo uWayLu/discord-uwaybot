@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { getActiveModel } from "./model-router.js";
+import { getModel } from "./model-router.js";
 import type { Topic } from "../services/topic-detector.js";
 import { formatMessagesForLLM } from "../services/context-builder.js";
 import { readFileSync } from "node:fs";
@@ -45,7 +45,7 @@ export async function summarizeTopics(topics: Topic[]): Promise<SummaryResult> {
 
   const t0 = Date.now();
   const response = await llm.chat.completions.create({
-    model: getActiveModel(),
+    model: getModel("core"),
     messages: [
       { role: "system", content: systemPrompt + OUTPUT_FORMAT },
       { role: "user", content: userContent },
