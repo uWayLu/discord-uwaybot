@@ -135,8 +135,8 @@ async function handleMention(message: Message) {
       rag?.block,
     );
 
-    // 本機優先：非空問句才視內容決定是否網路查證
-    if (questionRaw !== "" && shouldWebCheck(question)) {
+    // 本機優先：先出本機答案；短問句再跑 reference，確認是知名台詞/捏他才覆蓋
+    if (questionRaw !== "" && isReferenceEligible(question)) {
       const ref = await maybeReference(question, authorName);
       if (ref) {
         const text = ref.source
@@ -224,15 +224,12 @@ function isExplicitSearch(text: string): boolean {
   return EXPLICIT_SEARCH_RE.test(text);
 }
 
-const FACTUAL_RE =
-  /(天氣|新聞|最新|價格|多少|幾點|日期|今天|明天|票房|比分|賽況|排名|股價|匯率|誰|是什麼|哪裡|幾月|幾日|幾人|時事|消息|進度|版本|版號|下載|多少錢)/;
-
-// 依問句內容判斷是否需要網路查證（明確搜尋字眼，或短事實型問句）。
-function shouldWebCheck(text: string): boolean {
+// 短問句都值得送 reference 查證：確認是知名台詞/咒文/歌詞/捏他才覆蓋本機答案。
+function isReferenceEligible(text: string): boolean {
   if (text.startsWith("/")) return false;
   if (/\w+:\/\/|https?:\/\//i.test(text)) return false;
-  if (isExplicitSearch(text)) return true;
-  return text.length >= 2 && text.length <= 80 && FACTUAL_RE.test(text);
+  if (isExplicitGifRequest(text)) return false;
+  return text.length >= 2 && text.length <= 80;
 }
 
 async function maybeReference(
