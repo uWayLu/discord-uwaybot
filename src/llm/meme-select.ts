@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { config } from "../config.js";
+import { getActiveModel } from "./model-router.js";
 
 export interface MemeCandidate {
   id: number;
@@ -43,7 +43,7 @@ export async function selectMeme(
 
   try {
     const response = await llm.chat.completions.create({
-      model: config.openai.model,
+      model: getActiveModel(),
       messages: [
         { role: "system", content: SYSTEM },
         { role: "user", content: `想要: ${q}\n\n候選梗圖:\n${list}` },

@@ -31,6 +31,13 @@ export const config = {
     baseUrl: optional("OPENAI_BASE_URL", "https://gemini.uwaylu.net/v1"),
     model: optional("OPENAI_MODEL", "gemini-3-flash"),
   },
+  llmRouter: {
+    enabled: optionalInt("MODEL_PROBE_ENABLED", 1) === 1,
+    intervalMs: optionalInt("MODEL_PROBE_INTERVAL_MIN", 10) * 60_000,
+    probeMaxMs: optionalInt("MODEL_PROBE_MAX_MS", 25_000),
+    smartModel: optional("MODEL_SMART", "big-pickle"),
+    fastModel: optional("MODEL_FAST", "deepseek-v4-flash-free"),
+  },
   summary: {
     maxHours: optionalInt("SUMMARY_MAX_HOURS", 336),
     topicGapMinutes: optionalInt("SUMMARY_TOP_MINUTES", 10),

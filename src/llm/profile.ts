@@ -1,5 +1,5 @@
 import { llm } from "./client.js";
-import { config } from "../config.js";
+import { getActiveModel } from "./model-router.js";
 import type { StoredMessage } from "../services/message-store.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -63,7 +63,7 @@ export async function generateProfile(
   const userContent = `以下是一位使用者在 Discord 上的 ${sampled.length} 則訊息：\n\n${body}`;
 
   const response = await llm.chat.completions.create({
-    model: config.openai.model,
+    model: getActiveModel(),
     messages: [
       { role: "system", content: systemPrompt + OUTPUT_FORMAT },
       { role: "user", content: userContent },
