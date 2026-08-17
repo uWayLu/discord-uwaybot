@@ -12,6 +12,7 @@ export interface StoredMessage {
   createdAt: number;
   replyTo: string | null;
   hasEmbed: boolean;
+  ocrText: string | null;
 }
 
 export async function storeMessage(msg: {
@@ -26,6 +27,10 @@ export async function storeMessage(msg: {
   hasEmbed: boolean;
 }): Promise<void> {
   await db.insert(messages).values(msg).onConflictDoNothing();
+}
+
+export async function updateMessageOcr(id: string, ocrText: string): Promise<void> {
+  await db.update(messages).set({ ocrText }).where(eq(messages.id, id));
 }
 
 export async function getMessagesInTimeRange(

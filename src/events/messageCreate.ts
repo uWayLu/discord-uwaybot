@@ -14,8 +14,13 @@ import { searchGif, isExplicitGifRequest, cleanGifQuery, isValidGifKeyword } fro
 import { detectChatMode } from "../utils/chat-mode.js";
 import { gifKeyword } from "../llm/gif-keyword.js";
 import { retrieveRagContext } from "../services/rag-retrieval.js";
+import { ocrImageUrl } from "../services/ocr.js";
+import { getImageAttachmentUrl } from "../utils/image.js";
+import { updateMessageOcr } from "../services/message-store.js";
 
 startSessionSweep();
+
+const pendingOcr = new Map<string, Promise<string>>();
 
 export default {
   name: Events.MessageCreate,
@@ -40,6 +45,16 @@ export default {
         replyTo: message.reference?.messageId ?? null,
         hasEmbed: message.embeds.length > 0,
       });
+
+      const imgUrl = getImageAttachmentUrl(message);
+      if (imgUrl) {
+        const p = ocrImageUrl(imgUrl).then(async (text) => {
+          if (text) await updateMessageOcr(message.id, text);
+          return text;
+        });
+        pendingOcr.set(message.id, p);
+        p.finally(() => pendingOcr.delete(message.id)).catch(() => {});
+      }
 
       const displayName =
         message.member?.displayName ?? message.author.username ?? message.author.id;
@@ -120,6 +135,18 @@ async function handleMention(message: Message) {
 
     const question = questionRaw || "你怎麼看？";
 
+    let imageOcrText = "";
+    const curImgUrl = getImageAttachmentUrl(message);
+    if (curImgUrl) {
+      const pending = pendingOcr.get(message.id);
+      if (pending) {
+        imageOcrText = await pending;
+      } else {
+        imageOcrText = await ocrImageUrl(curImgUrl);
+        if (imageOcrText) await updateMessageOcr(message.id, imageOcrText);
+      }
+    }
+
     const rag = message.guild
       ? await retrieveRagContext(question, recentMessages, message.guild)
       : null;
@@ -133,6 +160,7 @@ async function handleMention(message: Message) {
       detectChatMode(question),
       gatherGuildEmojis(message),
       rag?.block,
+      imageOcrText,
     );
 
     // 本機優先：先出本機答案；短問句再跑 reference，確認是知名台詞/捏他才覆蓋

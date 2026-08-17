@@ -15,6 +15,13 @@
       "when": 1785828056610,
       "tag": "0001_tough_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786957708480,
+      "tag": "0002_orange_scarecrow",
+      "breakpoints": true
     }
   ]
 }

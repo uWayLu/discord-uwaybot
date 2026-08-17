@@ -34,15 +34,21 @@ export async function chatReply(
   mode: ChatMode = "short",
   guildEmojis: string[] = [],
   ragBlock?: string,
+  imageOcrText?: string,
 ): Promise<ChatResult> {
   const prompt = mode === "medium" ? systemPromptMedium : systemPrompt;
   const labeled = contextMessages.map((m, i) => {
     const name = nameMap?.get(m.userId) ?? m.userId;
-    return `[${i}] <${name}> ${m.content}`;
+    const ocr = m.ocrText ? `（圖文内容: ${m.ocrText}）` : "";
+    return `[${i}] <${name}> ${m.content}${ocr}`;
   });
   const context = labeled.join("\n");
 
   let userContent = `最近的對話上下文（[索引] 放在句首）:\n${context}\n\n使用者的訊息: ${question}`;
+
+  if (imageOcrText) {
+    userContent += `\n\n使用者傳了一張圖片，圖片中的文字（OCR）:\n${imageOcrText}`;
+  }
 
   if (guildEmojis.length > 0) {
     userContent += `\n\n可用伺服器 emoji（只能挑這裡面的）：${guildEmojis.join(" ")}`;

@@ -10,6 +10,7 @@ export const messages = sqliteTable("messages", {
   createdAt: integer("created_at").notNull(),
   replyTo: text("reply_to"),
   hasEmbed: integer("has_embed", { mode: "boolean" }).default(false),
+  ocrText: text("ocr_text"),
 }, (t) => [
   index("idx_messages_channel_time").on(t.channelId, t.createdAt),
   index("idx_messages_guild").on(t.guildId, t.createdAt),

@@ -71,4 +71,7 @@ export const config = {
     minQueryChars: optionalInt("RAG_MIN_QUERY_CHARS", 2),
     bm25Threshold: optionalInt("RAG_BM25_THRESHOLD", 0),
   },
+  ocr: {
+    enabled: optionalInt("OCR_ENABLED", 1) === 1,
+  },
 } as const;

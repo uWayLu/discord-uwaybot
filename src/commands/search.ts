@@ -127,7 +127,7 @@ const command: Command = {
     const filtered = messages.filter(
       (m) =>
         !m.content.startsWith("/") &&
-        m.content.trim().length > 0 &&
+        (m.content.trim().length > 0 || (m.ocrText ?? "").trim().length > 0) &&
         !m.hasEmbed,
     );
 

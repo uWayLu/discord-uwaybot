@@ -26,11 +26,21 @@ CREATE TABLE IF NOT EXISTS ${INDEXED_TABLE} (
 `;
 
 // 同時寫入 FTS 表與追蹤表：新插入的訊息立即被記錄為「已索引」。
+// content 與 ocr_text 一起索引，讓圖片 OCR 文字也可被檢索命中。
 const CREATE_TRIGGER_SQL = `
 CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
   INSERT OR IGNORE INTO ${FTS_TABLE}(id, guild_id, channel_id, user_id, created_at, content)
-  VALUES (new.id, new.guild_id, new.channel_id, new.user_id, new.created_at, new.content);
+  VALUES (new.id, new.guild_id, new.channel_id, new.user_id, new.created_at, new.content || ' ' || COALESCE(new.ocr_text, ''));
   INSERT OR IGNORE INTO ${INDEXED_TABLE}(id) VALUES (new.id);
+END;
+`;
+
+// 背景 OCR 完成後更新 ocr_text：重建 FTS 列，讓圖片文字即時可被檢索。
+const CREATE_UPDATE_TRIGGER_SQL = `
+CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE OF ocr_text ON messages BEGIN
+  DELETE FROM ${FTS_TABLE} WHERE id = new.id;
+  INSERT INTO ${FTS_TABLE}(id, guild_id, channel_id, user_id, created_at, content)
+  VALUES (new.id, new.guild_id, new.channel_id, new.user_id, new.created_at, new.content || ' ' || COALESCE(new.ocr_text, ''));
 END;
 `;
 
@@ -49,6 +59,8 @@ export async function initFts(): Promise<void> {
   // 每次 drop+create 確保 trigger 與目前 schema 一致（舊版 trigger 不同步 fts_indexed）。
   client.exec(`DROP TRIGGER IF EXISTS messages_fts_ai;`);
   client.exec(CREATE_TRIGGER_SQL);
+  client.exec(`DROP TRIGGER IF EXISTS messages_fts_au;`);
+  client.exec(CREATE_UPDATE_TRIGGER_SQL);
   initialized = true;
 
   startBackfillWorker();

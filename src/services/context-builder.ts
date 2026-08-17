@@ -48,7 +48,8 @@ export function formatMessagesForLLM(
         minute: "2-digit",
       });
       const name = nameMap?.get(m.userId) ?? m.userId;
-      return `[${time}] <${name}> ${m.content}`;
+      const ocr = m.ocrText ? `（圖文内容: ${m.ocrText}）` : "";
+      return `[${time}] <${name}> ${m.content}${ocr}`;
     })
     .join("\n");
 }
