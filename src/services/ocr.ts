@@ -5,18 +5,35 @@ import { config } from "../config.js";
 const LANGS = ["eng", "chi_tra", "chi_sim"];
 const LANGDATA = join(import.meta.dirname, "langdata");
 
+const RECOGNIZE_TIMEOUT_MS = config.ocr.timeoutMs;
+const INIT_TIMEOUT_MS = Math.max(RECOGNIZE_TIMEOUT_MS, 150_000);
+
 let worker: Worker | null = null;
 let workerPromise: Promise<Worker> | null = null;
 let queue: Promise<string> = Promise.resolve("");
 
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => rej(new Error(`OCR ${label} timeout`)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 function ensureWorker(): Promise<Worker> {
   if (worker) return Promise.resolve(worker);
   if (!workerPromise) {
-    workerPromise = createWorker(LANGS.join("+"), undefined, {
-      langPath: LANGDATA,
-      cachePath: import.meta.dirname,
-      gzip: false,
-    }).then((w) => {
+    workerPromise = withTimeout(
+      createWorker(LANGS.join("+"), undefined, {
+        langPath: LANGDATA,
+        cachePath: import.meta.dirname,
+        gzip: false,
+      }),
+      INIT_TIMEOUT_MS,
+      "init",
+    ).then((w) => {
       worker = w;
       workerPromise = null;
       return w;
@@ -27,12 +44,8 @@ function ensureWorker(): Promise<Worker> {
 
 async function recognizeNow(buffer: Buffer): Promise<string> {
   const w = await ensureWorker();
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_, rej) => {
-    timer = setTimeout(() => rej(new Error("OCR timeout")), 30_000);
-  });
   try {
-    const result = await Promise.race([w.recognize(buffer), timeout]);
+    const result = await withTimeout(w.recognize(buffer), RECOGNIZE_TIMEOUT_MS, "recognize");
     return (result.data?.text ?? "").trim();
   } catch (err) {
     console.error("[OCR] recognize failed:", err);
@@ -42,9 +55,8 @@ async function recognizeNow(buffer: Buffer): Promise<string> {
       /* ignore */
     }
     worker = null;
+    workerPromise = null;
     return "";
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 

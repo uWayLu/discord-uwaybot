@@ -73,5 +73,6 @@ export const config = {
   },
   ocr: {
     enabled: optionalInt("OCR_ENABLED", 1) === 1,
+    timeoutMs: optionalInt("OCR_TIMEOUT_MS", 75_000),
   },
 } as const;
