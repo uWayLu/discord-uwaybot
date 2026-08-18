@@ -1,36 +1,30 @@
 import { config } from "../config.js";
 import { selectMeme } from "../llm/meme-select.js";
 
+const MEMES_FEED = "https://memes.tw/wtf/api";
+const MEMES_PAGES = 3;
+const MEMES_CAP = 50;
+
 /**
- * 從 memes.tw 熱門 feed 挑一張語意最符合 query 的梗圖，回傳其網址；
- * 無符合或失敗回傳空陣列。
+ * 從 memes.tw 熱門 feed 多頁合併挑一張語意最符合 query 的梗圖；
+ * memes.tw 挑不到（或無候選）時，退回 klipy 關鍵字搜尋。回傳網址陣列。
  */
 export async function searchGif(query: string): Promise<string[]> {
   if (!query.trim()) return [];
 
-  let url = "https://memes.tw/wtf/api";
-  if (config.gif.contest) {
-    url += `?contest=${encodeURIComponent(config.gif.contest)}`;
+  const { candidates, srcById } = await fetchMemeCandidates();
+  if (candidates.length > 0) {
+    const chosen = await selectMeme(query, candidates, srcById);
+    if (chosen) return [chosen];
   }
 
-  let json: unknown;
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "discord-uwaybot" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) {
-      console.warn("[GIF] MEMES.TW HTTP", res.status);
-      return [];
-    }
-    json = await res.json();
-  } catch (e) {
-    console.error("[GIF] MEMES.TW error:", (e as Error).message);
-    return [];
-  }
+  return searchKlipy(query);
+}
 
-  const list = Array.isArray(json) ? json : [];
+async function fetchMemeCandidates(): Promise<{
+  candidates: Array<{ id: number; title: string; hashtag: string; contest: string }>;
+  srcById: Map<number, string>;
+}> {
   const srcById = new Map<number, string>();
   const candidates: Array<{
     id: number;
@@ -39,23 +33,103 @@ export async function searchGif(query: string): Promise<string[]> {
     contest: string;
   }> = [];
 
-  for (const item of list) {
-    const id = Number(item?.id);
-    const src = item?.src;
-    if (Number.isNaN(id) || typeof src !== "string" || !isImageUrl(src)) continue;
-    if (srcById.has(id)) continue;
-    srcById.set(id, src);
-    candidates.push({
-      id,
-      title: typeof item?.title === "string" ? item.title : "",
-      hashtag: typeof item?.hashtag === "string" ? item.hashtag : "",
-      contest:
-        typeof item?.contest?.name === "string" ? item.contest.name : "",
-    });
+  for (let page = 1; page <= MEMES_PAGES && candidates.length < MEMES_CAP; page++) {
+    let url = MEMES_FEED;
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    if (config.gif.contest) params.set("contest", config.gif.contest);
+    const qs = params.toString();
+    if (qs) url += `?${qs}`;
+
+    let list: any[] = [];
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "discord-uwaybot" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) {
+        console.warn("[GIF] MEMES.TW HTTP", res.status);
+        continue;
+      }
+      const json = await res.json();
+      if (Array.isArray(json)) list = json;
+    } catch (e) {
+      console.error("[GIF] MEMES.TW error:", (e as Error).message);
+      continue;
+    }
+
+    for (const item of list) {
+      if (candidates.length >= MEMES_CAP) break;
+      const id = Number(item?.id);
+      const src = item?.src;
+      if (Number.isNaN(id) || typeof src !== "string" || !isImageUrl(src)) continue;
+      if (srcById.has(id)) continue;
+      srcById.set(id, src);
+      candidates.push({
+        id,
+        title: typeof item?.title === "string" ? item.title : "",
+        hashtag: typeof item?.hashtag === "string" ? item.hashtag : "",
+        contest:
+          typeof item?.contest?.name === "string" ? item.contest.name : "",
+      });
+    }
   }
 
-  const chosen = await selectMeme(query, candidates, srcById);
-  return chosen ? [chosen] : [];
+  return { candidates, srcById };
+}
+
+/**
+ * klipy 關鍵字搜尋（memes.tw 挑不到時作為 fallback）。
+ * 每個結果取一張代表性 .gif（md → sm → hd），依相關性排序回傳。
+ */
+async function searchKlipy(query: string): Promise<string[]> {
+  const key = config.gif.klipyApiKey;
+  if (!key) return [];
+  if (!query.trim()) return [];
+
+  const url =
+    `https://api.klipy.com/api/v1/${encodeURIComponent(key)}/gifs/search` +
+    `?q=${encodeURIComponent(query)}` +
+    `&locale=${encodeURIComponent(config.gif.locale)}` +
+    `&per_page=8`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "discord-uwaybot" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      console.warn("[GIF] KLIPY HTTP", res.status);
+      return [];
+    }
+    const json = await res.json();
+    return extractKlipyGifUrls(json);
+  } catch (e) {
+    console.error("[GIF] KLIPY error:", (e as Error).message);
+    return [];
+  }
+}
+
+function extractKlipyGifUrls(json: unknown): string[] {
+  const results = (json as any)?.data?.data;
+  if (!Array.isArray(results)) return [];
+
+  const urls: string[] = [];
+  for (const item of results) {
+    const file = item?.file;
+    if (!file || typeof file !== "object") continue;
+    const chosen =
+      pickGifUrl(file, "md") ?? pickGifUrl(file, "sm") ?? pickGifUrl(file, "hd");
+    if (chosen) urls.push(chosen);
+  }
+  return urls;
+}
+
+function pickGifUrl(file: any, size: "md" | "sm" | "hd"): string | null {
+  const cand = file?.[size]?.gif?.url;
+  return typeof cand === "string" && /\.gif(\?.*)?$/i.test(cand) ? cand : null;
 }
 
 const IMAGE_EXT_RE = /\.(gif|jpe?g|png|webp)(\?.*)?$/i;
